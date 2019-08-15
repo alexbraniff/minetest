@@ -155,8 +155,6 @@ src/genericobject.cpp
 src/genericobject.h
 src/gettext.cpp
 src/gettext.h
-src/gui/guiButton.cpp
-src/gui/guiButton.h
 src/gui/guiChatConsole.cpp
 src/gui/guiChatConsole.h
 src/gui/guiConfirmRegistration.cpp
@@ -172,8 +170,6 @@ src/gui/guiPasswordChange.cpp
 src/gui/guiPathSelectMenu.cpp
 src/gui/guiPathSelectMenu.h
 src/gui/guiScrollBar.cpp
-src/gui/guiSkin.cpp
-src/gui/guiSkin.h
 src/gui/guiTable.cpp
 src/gui/guiTable.h
 src/gui/guiVolumeChange.cpp

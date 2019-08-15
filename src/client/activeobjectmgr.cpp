@@ -35,7 +35,8 @@ void ActiveObjectMgr::clear()
 void ActiveObjectMgr::step(
 		float dtime, const std::function<void(ClientActiveObject *)> &f)
 {
-	g_profiler->avg("ActiveObjectMgr: CAO count [#]", m_active_objects.size());
+	g_profiler->avg("Client::ActiveObjectMgr: num of objects",
+			m_active_objects.size());
 	for (auto &ao_it : m_active_objects) {
 		f(ao_it.second);
 	}

@@ -30,7 +30,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/renderingengine.h"
 #include "settings.h"
 #include "camera.h"  // CameraModes
-#include "config.h"
 
 
 Sky::Sky(s32 id, ITextureSource *tsrc):
@@ -45,7 +44,7 @@ Sky::Sky(s32 id, ITextureSource *tsrc):
 
 	video::SMaterial mat;
 	mat.Lighting = false;
-#if ENABLE_GLES
+#ifdef __ANDROID__
 	mat.ZBuffer = video::ECFN_DISABLED;
 #else
 	mat.ZBuffer = video::ECFN_NEVER;
@@ -274,7 +273,7 @@ void Sky::render()
 			// Stars are only drawn when brighter than skycolor
 			if (starcolor.getBlue() < m_skycolor.getBlue())
 				break;
-#if ENABLE_GLES
+#ifdef __ANDROID__
 			u16 indices[SKY_STAR_COUNT * 3];
 			video::S3DVertex vertices[SKY_STAR_COUNT * 3];
 			for (u32 i = 0; i < SKY_STAR_COUNT; i++) {

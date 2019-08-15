@@ -87,13 +87,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 // Size of player's main inventory
-#define PLAYER_INVENTORY_SIZE (8 * 4)
+#define PLAYER_INVENTORY_SIZE (9 * 5)
 
 // Default maximum hit points of a player
-#define PLAYER_MAX_HP_DEFAULT 20
+#define PLAYER_MAX_HP_DEFAULT 50
 
 // Default maximal breath of a player
-#define PLAYER_MAX_BREATH_DEFAULT 11
+#define PLAYER_MAX_BREATH_DEFAULT 20
 
 // Number of different files to try to save a player to if the first fails
 // (because of a case-insensitive filesystem)
@@ -116,4 +116,4 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #else
 #define TTF_DEFAULT_FONT_SIZE (16)
 #endif
-#define DEFAULT_FONT_SIZE (10)
+#define DEFAULT_FONT_SIZE (12)

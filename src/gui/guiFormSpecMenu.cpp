@@ -23,7 +23,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <iterator>
 #include <sstream>
 #include <limits>
-#include "guiButton.h"
 #include "guiFormSpecMenu.h"
 #include "guiTable.h"
 #include "constants.h"
@@ -326,8 +325,8 @@ void GUIFormSpecMenu::parseContainer(parserData* data, const std::string &elemen
 			parts[1] = parts[1].substr(0, parts[1].find(';'));
 
 		container_stack.push(pos_offset);
-		pos_offset.X += stof(parts[0]);
-		pos_offset.Y += stof(parts[1]);
+		pos_offset.X += MYMAX(0, stof(parts[0]));
+		pos_offset.Y += MYMAX(0, stof(parts[1]));
 		return;
 	}
 	errorstream<< "Invalid container start element (" << parts.size() << "): '" << element << "'"  << std::endl;
@@ -500,9 +499,6 @@ void GUIFormSpecMenu::parseCheckbox(parserData* data, const std::string &element
 		gui::IGUICheckBox* e = Environment->addCheckBox(fselected, rect, this,
 					spec.fid, spec.flabel.c_str());
 
-		auto style = getStyleForElement("checkbox", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-
 		if (spec.fname == data->focused_fieldname) {
 			Environment->setFocus(e);
 		}
@@ -558,9 +554,6 @@ void GUIFormSpecMenu::parseScrollBar(parserData* data, const std::string &elemen
 		spec.send  = true;
 		gui::IGUIScrollBar* e =
 				Environment->addScrollBar(is_horizontal,rect,this,spec.fid);
-
-		auto style = getStyleForElement("scrollbar", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
 
 		e->setMax(1000);
 		e->setMin(0);
@@ -705,38 +698,8 @@ void GUIFormSpecMenu::parseButton(parserData* data, const std::string &element,
 		spec.ftype = f_Button;
 		if(type == "button_exit")
 			spec.is_exit = true;
-
-		GUIButton *e = GUIButton::addButton(Environment, rect, this, spec.fid, spec.flabel.c_str());
-
-		auto style = getStyleForElement(type, name, (type != "button") ? "button" : "");
-		if (style.isNotDefault(StyleSpec::BGCOLOR)) {
-			e->setColor(style.getColor(StyleSpec::BGCOLOR));
-		}
-		if (style.isNotDefault(StyleSpec::TEXTCOLOR)) {
-			e->setOverrideColor(style.getColor(StyleSpec::TEXTCOLOR));
-		}
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-		e->setDrawBorder(style.getBool(StyleSpec::BORDER, true));
-
-		if (style.isNotDefault(StyleSpec::BGIMG)) {
-			std::string image_name = style.get(StyleSpec::BGIMG, "");
-			std::string pressed_image_name = style.get(StyleSpec::BGIMG_PRESSED, "");
-
-			video::ITexture *texture = 0;
-			video::ITexture *pressed_texture = 0;
-			texture = m_tsrc->getTexture(image_name);
-			if (!pressed_image_name.empty())
-				pressed_texture = m_tsrc->getTexture(pressed_image_name);
-			else
-				pressed_texture = texture;
-
-			e->setUseAlphaChannel(style.getBool(StyleSpec::ALPHA, true));
-			e->setImage(guiScalingImageButton(
-					Environment->getVideoDriver(), texture, geom.X, geom.Y));
-			e->setPressedImage(guiScalingImageButton(
-					Environment->getVideoDriver(), pressed_texture, geom.X, geom.Y));
-			e->setScaleImage(true);
-		}
+		gui::IGUIButton* e = Environment->addButton(rect, this, spec.fid,
+				spec.flabel.c_str());
 
 		if (spec.fname == data->focused_fieldname) {
 			Environment->setFocus(e);
@@ -915,9 +878,6 @@ void GUIFormSpecMenu::parseTable(parserData* data, const std::string &element)
 		if (!str_initial_selection.empty() && str_initial_selection != "0")
 			e->setSelected(stoi(str_initial_selection));
 
-		auto style = getStyleForElement("table", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-
 		m_tables.emplace_back(spec, e);
 		m_fields.push_back(spec);
 		return;
@@ -992,9 +952,6 @@ void GUIFormSpecMenu::parseTextList(parserData* data, const std::string &element
 		if (!str_initial_selection.empty() && str_initial_selection != "0")
 			e->setSelected(stoi(str_initial_selection));
 
-		auto style = getStyleForElement("textlist", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-
 		m_tables.emplace_back(spec, e);
 		m_fields.push_back(spec);
 		return;
@@ -1066,9 +1023,6 @@ void GUIFormSpecMenu::parseDropDown(parserData* data, const std::string &element
 
 		if (!str_initial_selection.empty())
 			e->setSelected(stoi(str_initial_selection)-1);
-
-		auto style = getStyleForElement("dropdown", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
 
 		m_fields.push_back(spec);
 
@@ -1153,11 +1107,6 @@ void GUIFormSpecMenu::parsePwdField(parserData* data, const std::string &element
 
 		e->setPasswordBox(true,L'*');
 
-		auto style = getStyleForElement("pwdfield", name, "field");
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-		e->setDrawBorder(style.getBool(StyleSpec::BORDER, true));
-		e->setOverrideColor(style.getColor(StyleSpec::TEXTCOLOR, video::SColor(0xFFFFFFFF)));
-
 		irr::SEvent evt;
 		evt.EventType            = EET_KEY_INPUT_EVENT;
 		evt.KeyInput.Key         = KEY_END;
@@ -1233,14 +1182,6 @@ void GUIFormSpecMenu::createTextField(parserData *data, FieldSpec &spec,
 			evt.KeyInput.Shift       = 0;
 			evt.KeyInput.PressedDown = true;
 			e->OnEvent(evt);
-		}
-
-		auto style = getStyleForElement(is_multiline ? "textarea" : "field", spec.fname);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-		e->setDrawBorder(style.getBool(StyleSpec::BORDER, true));
-		e->setOverrideColor(style.getColor(StyleSpec::TEXTCOLOR, video::SColor(0xFFFFFFFF)));
-		if (style.get(StyleSpec::BGCOLOR, "") == "transparent") {
-			e->setDrawBackground(false);
 		}
 	}
 
@@ -1455,11 +1396,6 @@ void GUIFormSpecMenu::parseLabel(parserData* data, const std::string &element)
 			gui::IGUIStaticText *e = gui::StaticText::add(Environment,
 				spec.flabel.c_str(), rect, false, false, this, spec.fid);
 			e->setTextAlignment(gui::EGUIA_UPPERLEFT, gui::EGUIA_CENTER);
-
-			auto style = getStyleForElement("label", spec.fname);
-			e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-			e->setOverrideColor(style.getColor(StyleSpec::TEXTCOLOR, video::SColor(0xFFFFFFFF)));
-
 			m_fields.push_back(spec);
 		}
 
@@ -1528,14 +1464,9 @@ void GUIFormSpecMenu::parseVertLabel(parserData* data, const std::string &elemen
 			L"",
 			258+m_fields.size()
 		);
-		gui::IGUIStaticText *e = gui::StaticText::add(Environment, spec.flabel.c_str(),
+		gui::IGUIStaticText *t = gui::StaticText::add(Environment, spec.flabel.c_str(),
 			rect, false, false, this, spec.fid);
-		e->setTextAlignment(gui::EGUIA_CENTER, gui::EGUIA_CENTER);
-
-		auto style = getStyleForElement("vertlabel", spec.fname, "label");
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-		e->setOverrideColor(style.getColor(StyleSpec::TEXTCOLOR, video::SColor(0xFFFFFFFF)));
-
+		t->setTextAlignment(gui::EGUIA_CENTER, gui::EGUIA_CENTER);
 		m_fields.push_back(spec);
 		return;
 	}
@@ -1621,21 +1552,14 @@ void GUIFormSpecMenu::parseImageButton(parserData* data, const std::string &elem
 			Environment->setFocus(e);
 		}
 
-		auto style = getStyleForElement("image_button", spec.fname);
-
-		e->setUseAlphaChannel(style.getBool(StyleSpec::ALPHA, true));
+		e->setUseAlphaChannel(true);
 		e->setImage(guiScalingImageButton(
 			Environment->getVideoDriver(), texture, geom.X, geom.Y));
 		e->setPressedImage(guiScalingImageButton(
 			Environment->getVideoDriver(), pressed_texture, geom.X, geom.Y));
 		e->setScaleImage(true);
-		if (parts.size() >= 7) {
-			e->setNotClipped(noclip);
-			e->setDrawBorder(drawborder);
-		} else {
-			e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-			e->setDrawBorder(style.getBool(StyleSpec::BORDER, true));
-		}
+		e->setNotClipped(noclip);
+		e->setDrawBorder(drawborder);
 
 		m_fields.push_back(spec);
 		return;
@@ -1730,16 +1654,11 @@ void GUIFormSpecMenu::parseTabHeader(parserData* data, const std::string &elemen
 			Environment->setFocus(e);
 		}
 
-		auto style = getStyleForElement("tabheader", name);
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, true));
+		e->setNotClipped(true);
 
 		for (const std::string &button : buttons) {
-			auto tab = e->addTab(unescape_translate(unescape_string(
+			e->addTab(unescape_translate(unescape_string(
 				utf8_to_wide(button))).c_str(), -1);
-			if (style.isNotDefault(StyleSpec::BGCOLOR))
-				tab->setBackgroundColor(style.getColor(StyleSpec::BGCOLOR));
-
-			tab->setTextColor(style.getColor(StyleSpec::TEXTCOLOR, video::SColor(0xFFFFFFFF)));
 		}
 
 		if ((tab_index >= 0) &&
@@ -1814,10 +1733,6 @@ void GUIFormSpecMenu::parseItemImageButton(parserData* data, const std::string &
 		);
 
 		gui::IGUIButton *e = Environment->addButton(rect, this, spec.fid, L"");
-
-		auto style = getStyleForElement("item_image_button", spec.fname, "image_button");
-		e->setNotClipped(style.getBool(StyleSpec::NOCLIP, false));
-		e->setDrawBorder(style.getBool(StyleSpec::BORDER, true));
 
 		if (spec.fname == data->focused_fieldname) {
 			Environment->setFocus(e);
@@ -2105,61 +2020,6 @@ void GUIFormSpecMenu::parseAnchor(parserData *data, const std::string &element)
 			<< "'" << std::endl;
 }
 
-bool GUIFormSpecMenu::parseStyle(parserData *data, const std::string &element, bool style_type)
-{
-	std::vector<std::string> parts = split(element, ';');
-
-	if (parts.size() < 2) {
-		errorstream << "Invalid style element (" << parts.size() << "): '" << element
-					<< "'" << std::endl;
-		return false;
-	}
-
-	std::string selector = trim(parts[0]);
-	if (selector.empty()) {
-		errorstream << "Invalid style element (Selector required): '" << element
-					<< "'" << std::endl;
-		return false;
-	}
-
-	StyleSpec spec;
-
-	for (size_t i = 1; i < parts.size(); i++) {
-		size_t equal_pos = parts[i].find('=');
-		if (equal_pos == std::string::npos) {
-			errorstream << "Invalid style element (Property missing value): '" << element
-						<< "'" << std::endl;
-			return false;
-		}
-
-		std::string propname = trim(parts[i].substr(0, equal_pos));
-		std::string value    = trim(unescape_string(parts[i].substr(equal_pos + 1)));
-
-		std::transform(propname.begin(), propname.end(), propname.begin(), ::tolower);
-
-		StyleSpec::Property prop = StyleSpec::GetPropertyByName(propname);
-		if (prop == StyleSpec::NONE) {
-			if (property_warned.find(propname) != property_warned.end()) {
-				warningstream << "Invalid style element (Unknown property " << propname << "): '"
-						<< element
-						<< "'" << std::endl;
-				property_warned.insert(propname);
-			}
-			return false;
-		}
-
-		spec.set(prop, value);
-	}
-
-	if (style_type) {
-		theme_by_type[selector] |= spec;
-	} else {
-		theme_by_name[selector] |= spec;
-	}
-
-	return true;
-}
-
 void GUIFormSpecMenu::parseElement(parserData* data, const std::string &element)
 {
 	//some prechecks
@@ -2325,16 +2185,6 @@ void GUIFormSpecMenu::parseElement(parserData* data, const std::string &element)
 		return;
 	}
 
-	if (type == "style") {
-		parseStyle(data, description, false);
-		return;
-	}
-
-	if (type == "style_type") {
-		parseStyle(data, description, true);
-		return;
-	}
-
 	// Ignore others
 	infostream << "Unknown DrawSpec: type=" << type << ", data=\"" << description << "\""
 			<< std::endl;
@@ -2405,8 +2255,6 @@ void GUIFormSpecMenu::regenerateGui(v2u32 screensize)
 	m_inventory_rings.clear();
 	m_static_texts.clear();
 	m_dropdowns.clear();
-	theme_by_name.clear();
-	theme_by_type.clear();
 
 	m_bgfullscreen = false;
 
@@ -4195,28 +4043,4 @@ std::wstring GUIFormSpecMenu::getLabelByID(s32 id)
 		}
 	}
 	return L"";
-}
-
-StyleSpec GUIFormSpecMenu::getStyleForElement(const std::string &type,
-		const std::string &name, const std::string &parent_type) {
-	StyleSpec ret;
-
-	if (!parent_type.empty()) {
-		auto it = theme_by_type.find(parent_type);
-		if (it != theme_by_type.end()) {
-			ret |= it->second;
-		}
-	}
-
-	auto it = theme_by_type.find(type);
-	if (it != theme_by_type.end()) {
-		ret |= it->second;
-	}
-
-	it = theme_by_name.find(name);
-	if (it != theme_by_name.end()) {
-		ret |= it->second;
-	}
-
-	return ret;
 }

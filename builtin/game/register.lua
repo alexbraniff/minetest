@@ -303,6 +303,7 @@ end
 
 -- Alias the forbidden item names to "" so they can't be
 -- created via itemstrings (e.g. /give)
+local name
 for name in pairs(forbidden_item_names) do
 	core.registered_aliases[name] = ""
 	register_alias_raw(name, "")
@@ -362,9 +363,9 @@ core.register_node(":ignore", {
 	drop = "",
 	groups = {not_in_creative_inventory=1},
 	on_place = function(itemstack, placer, pointed_thing)
-		core.chat_send_player(
+		minetest.chat_send_player(
 				placer:get_player_name(),
-				core.colorize("#FF0000",
+				minetest.colorize("#FF0000",
 				"You can't place 'ignore' nodes!"))
 		return ""
 	end,
@@ -412,6 +413,10 @@ function core.run_callbacks(callbacks, mode, ...)
 		local origin = core.callback_origins[callbacks[i]]
 		if origin then
 			core.set_last_run_mod(origin.mod)
+			--print("Running " .. tostring(callbacks[i]) ..
+			--	" (a " .. origin.name .. " callback in " .. origin.mod .. ")")
+		else
+			--print("No data associated with callback")
 		end
 		local cb_ret = callbacks[i](...)
 
@@ -532,7 +537,7 @@ end
 core.registered_on_player_hpchanges = { modifiers = { }, loggers = { } }
 
 function core.registered_on_player_hpchange(player, hp_change, reason)
-	local last
+	local last = false
 	for i = #core.registered_on_player_hpchanges.modifiers, 1, -1 do
 		local func = core.registered_on_player_hpchanges.modifiers[i]
 		hp_change, last = func(player, hp_change, reason)

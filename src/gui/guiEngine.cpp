@@ -39,8 +39,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/guiscalingfilter.h"
 #include "irrlicht_changes/static_text.h"
 
-#if ENABLE_GLES
+#ifdef __ANDROID__
 #include "client/tile.h"
+#include <GLES/gl.h>
 #endif
 
 
@@ -77,7 +78,7 @@ video::ITexture *MenuTextureSource::getTexture(const std::string &name, u32 *id)
 
 	m_to_delete.insert(name);
 
-#if ENABLE_GLES
+#ifdef __ANDROID__
 	video::ITexture *retval = m_driver->findTexture(name.c_str());
 	if (retval)
 		return retval;
@@ -390,15 +391,6 @@ void GUIEngine::cloudPostProcess()
 }
 
 /******************************************************************************/
-void GUIEngine::setFormspecPrepend(const std::string &fs)
-{
-	if (m_menu) {
-		m_menu->setFormspecPrepend(fs);
-	}
-}
-
-
-/******************************************************************************/
 void GUIEngine::drawBackground(video::IVideoDriver *driver)
 {
 	v2u32 screensize = driver->getScreenSize();
@@ -619,3 +611,4 @@ unsigned int GUIEngine::queueAsync(const std::string &serialized_func,
 {
 	return m_script->queueAsync(serialized_func, serialized_params);
 }
+

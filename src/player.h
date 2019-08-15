@@ -44,6 +44,7 @@ struct PlayerControl
 		bool a_jump,
 		bool a_aux1,
 		bool a_sneak,
+		bool a_sprint,
 		bool a_zoom,
 		bool a_LMB,
 		bool a_RMB,
@@ -60,6 +61,7 @@ struct PlayerControl
 		jump = a_jump;
 		aux1 = a_aux1;
 		sneak = a_sneak;
+		sprint = a_sprint;
 		zoom = a_zoom;
 		LMB = a_LMB;
 		RMB = a_RMB;
@@ -75,6 +77,7 @@ struct PlayerControl
 	bool jump = false;
 	bool aux1 = false;
 	bool sneak = false;
+	bool sprint = false;
 	bool zoom = false;
 	bool LMB = false;
 	bool RMB = false;
@@ -154,6 +157,7 @@ public:
 	f32 movement_acceleration_fast;
 	f32 movement_speed_walk;
 	f32 movement_speed_crouch;
+	f32 movement_speed_sprint;
 	f32 movement_speed_fast;
 	f32 movement_speed_climb;
 	f32 movement_speed_jump;
@@ -173,11 +177,6 @@ public:
 	PlayerSettings &getPlayerSettings() { return m_player_settings; }
 	static void settingsChangedCallback(const std::string &name, void *data);
 
-	// Returns non-empty `selected` ItemStack. `hand` is a fallback, if specified
-	ItemStack &getWieldedItem(ItemStack *selected, ItemStack *hand) const;
-	void setWieldIndex(u16 index);
-	u16 getWieldIndex() const { return m_wield_index; }
-
 	u32 keyPressed = 0;
 
 	HudElement* getHud(u32 id);
@@ -190,7 +189,6 @@ public:
 protected:
 	char m_name[PLAYERNAME_SIZE];
 	v3f m_speed;
-	u16 m_wield_index = 0;
 
 	std::vector<HudElement *> hud;
 private:

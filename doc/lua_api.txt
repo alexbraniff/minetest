@@ -1884,13 +1884,9 @@ When displaying text which can contain formspec code, e.g. text set by a player,
 use `minetest.formspec_escape`.
 For coloured text you can use `minetest.colorize`.
 
-**WARNING**: do _not_ use a element name starting with `key_`; those names are
-reserved to pass key press events to formspec!
-
-**WARNING**: Minetest allows you to add elements to every single formspec instance
+WARNING: Minetest allows you to add elements to every single formspec instance
 using `player:set_formspec_prepend()`, which may be the reason backgrounds are
-appearing when you don't expect them to, or why things are styled differently
-to normal. See [`no_prepend[]`] and [Styling Formspecs].
+appearing when you don't expect them to. See [`no_prepend[]`].
 
 Examples
 --------
@@ -2354,17 +2350,8 @@ Elements
         * `span=<value>`: number of following columns to affect
           (default: infinite).
 
-### `style[<name>;<prop1>;<prop2>;...]`
-
-* Set the style for the named element `name`.
-* Note: this **must** be before the element is defined.
-* See [Styling Formspecs].
-
-
-### `style_type[<type>;<prop1>;<prop2>;...]`
-
-* Sets the style for all elements of type `type` which appear after this element.
-* See [Styling Formspecs].
+**Note**: do _not_ use a element name starting with `key_`; those names are
+reserved to pass key press events to formspec!
 
 Migrating to Real Coordinates
 -----------------------------
@@ -2401,85 +2388,8 @@ offsets when migrating:
 | list    |            |         | Spacing is now 0.25 for both directions, meaning lists will be taller in height
 | label   | 0, +0.3    |         | The first line of text is now positioned centered exactly at the position specified
 
-Styling Formspecs
------------------
-
-Formspec elements can be themed using the style elements:
-
-    style[<name>;<prop1>;<prop2>;...]
-    style_type[<type>;<prop1>;<prop2>;...]
-
-Where a prop is:
-
-    property_name=property_value
-
-For example:
-
-    style_type[button;bgcolor=#006699]
-    style[world_delete;bgcolor=red;textcolor=yellow]
-    button[4,3.95;2.6,1;world_delete;Delete]
-
-Setting a property to nothing will reset it to the default value. For example:
-
-    style_type[button;bgimg=button.png;bgimg_pressed=button_pressed.png;border=false]
-    style[btn_exit;bgimg=;bgimg_pressed=;border=;bgcolor=red]
 
 
-### Supported Element Types
-
-Some types may inherit styles from parent types.
-
-* button
-* button_exit, inherits from button
-* checkbox
-* scrollbar
-* table
-* textlist
-* dropdown
-* field
-* pwdfield, inherits from field
-* textarea
-* label
-* vertlabel, inherits from field
-* image_button
-* item_image_button, inherits from image_button
-* tabheader
-
-
-### Valid Properties
-
-* button, button_exit
-    * alpha - boolean, whether to draw alpha in bgimg. Default true.
-    * bgcolor - color, sets button tint.
-    * bgimg - standard image. Defaults to none.
-    * bgimg_pressed - image when pressed. Defaults to bgimg when not provided.
-    * border - boolean, draw border. Set to false to hide the bevelled button pane. Default true.
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-    * textcolor - color, default white.
-* checkbox
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* scrollbar
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* table, textlist
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* dropdown
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* field, pwdfield, textarea
-    * border - set to false to hide the textbox background and border. Default true.
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-    * textcolor - color. Default white.
-* label, vertlabel
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* image_button
-    * alpha - boolean, whether to draw alpha in bgimg. Default true.
-    * border - boolean, draw border. Set to false to hide the bevelled button pane. Default false.
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* item_image_button
-    * border - boolean, draw border. Set to false to hide the bevelled button pane. Default false.
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-* tabheader
-    * noclip - boolean, set to true to allow the element to exceed formspec bounds.
-    * textcolor - color. Default white.
 
 Inventory
 =========
@@ -4156,12 +4066,6 @@ Chat
 
 * `minetest.chat_send_all(text)`
 * `minetest.chat_send_player(name, text)`
-* `minetest.format_chat_message(name, message)`
-    * Used by the server to format a chat message, based on the setting `chat_message_format`.
-      Refer to the documentation of the setting for a list of valid placeholders.
-    * Takes player name and message, and returns the formatted string to be sent to players.
-    * Can be redefined by mods if required, for things like colored names or messages.
-    * **Only** the first occurrence of each placeholder will be replaced.
 
 Environment access
 ------------------
@@ -4844,18 +4748,6 @@ Schematics
           the Lua code generated will use that number of spaces as indentation
           instead of a tab character.
 
-* `minetest.read_schematic(schematic, options)`
-    * Returns a Lua table representing the schematic (see: [Schematic specifier])
-    * `schematic` is the schematic to read (see: [Schematic specifier])
-    * `options` is a table containing the following optional parameters:
-        * `write_yslice_prob`: string value:
-            * `none`: no `write_yslice_prob` table is inserted,
-            * `low`: only probabilities that are not 254 or 255 are written in
-              the `write_ylisce_prob` table,
-            * `all`: write all probabilities to the `write_yslice_prob` table.
-            * The default for this option is `all`.
-            * Any invalid value will be interpreted as `all`.
-
 HTTP Requests
 -------------
 
@@ -5030,15 +4922,6 @@ Misc.
     * calls `rotate_and_place()` with `infinitestacks` set according to the state
       of the creative mode setting, checks for "sneak" to set the `invert_wall`
       parameter and `prevent_after_place` set to `true`.
-
-* `minetest.calculate_knockback(player, hitter, time_from_last_punch,
-  tool_capabilities, dir, distance, damage)`
-    * Returns the amount of knockback applied on the punched player.
-    * Arguments are equivalent to `register_on_punchplayer`, except the following:
-        * `distance`: distance between puncher and punched player
-    * This function can be overriden by mods that wish to modify this behaviour.
-    * You may want to cache and call the old function to allow multiple mods to
-      change knockback behaviour.
 
 * `minetest.forceload_block(pos[, transient])`
     * forceloads the position `pos`.
@@ -5486,14 +5369,6 @@ This is basically a reference to a C++ `ServerActiveObject`
 * `get_player_name()`: returns `""` if is not a player
 * `get_player_velocity()`: returns `nil` if is not a player, otherwise a
   table {x, y, z} representing the player's instantaneous velocity in nodes/s
-* `add_player_velocity(vel)`
-    * Adds to player velocity, this happens client-side and only once.
-    * Does not apply during free_move.
-    * Note that since the player speed is normalized at each move step,
-      increasing e.g. Y velocity beyond what would usually be achieved
-      (see: physics overrides) will cause existing X/Z velocity to be reduced.
-    * Example: `add_player_velocity({x=0, y=6.5, z=0})` is equivalent to
-      pressing the jump key (assuming default settings)
 * `get_look_dir()`: get camera direction as a unit vector
 * `get_look_vertical()`: pitch in radians
     * Angle ranges between -pi/2 and pi/2, which are straight up and down

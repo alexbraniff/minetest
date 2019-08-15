@@ -194,7 +194,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		New network float format
 		ContentFeatures version 13
 		Add full Euler rotations instead of just yaw
-		Add TOCLIENT_PLAYER_SPEED
 */
 
 #define LATEST_PROTOCOL_VERSION 37
@@ -294,11 +293,6 @@ enum ToClientCommand
 	TOCLIENT_CSM_RESTRICTION_FLAGS = 0x2A,
 	/*
 		u32 CSMRestrictionFlags byteflag
-	 */
-
-	TOCLIENT_PLAYER_SPEED = 0x2B,
-	/*
-		v3f added_vel
 	 */
 
 	// (oops, there is some gap here)
@@ -960,20 +954,10 @@ enum CSMRestrictionFlags : u64 {
 	// When those are complete, this should return to only being a restriction on the
 	// loading of client mods.
 	CSM_RF_LOAD_CLIENT_MODS = 0x00000001, // Don't load client-provided mods or 'builtin'
-	CSM_RF_CHAT_MESSAGES = 0x00000002,    // Disable chat message sending from CSM
-	CSM_RF_READ_ITEMDEFS = 0x00000004,    // Disable itemdef lookups
-	CSM_RF_READ_NODEDEFS = 0x00000008,    // Disable nodedef lookups
-	CSM_RF_LOOKUP_NODES = 0x00000010,     // Limit node lookups
-	CSM_RF_READ_PLAYERINFO = 0x00000020,  // Disable player info lookups
+	CSM_RF_CHAT_MESSAGES = 0x00000002, // Disable chat message sending from CSM
+	CSM_RF_READ_ITEMDEFS = 0x00000004, // Disable itemdef lookups
+	CSM_RF_READ_NODEDEFS = 0x00000008, // Disable nodedef lookups
+	CSM_RF_LOOKUP_NODES = 0x00000010, // Limit node lookups
+	CSM_RF_READ_PLAYERINFO = 0x00000020, // Disable player info lookups
 	CSM_RF_ALL = 0xFFFFFFFF,
-};
-
-enum InteractAction : u8
-{
-	INTERACT_START_DIGGING,     // 0: start digging (from undersurface) or use
-	INTERACT_STOP_DIGGING,      // 1: stop digging (all parameters ignored)
-	INTERACT_DIGGING_COMPLETED, // 2: digging completed
-	INTERACT_PLACE,             // 3: place block or item (to abovesurface)
-	INTERACT_USE,               // 4: use item
-	INTERACT_ACTIVATE           // 5: rightclick air ("activate")
 };

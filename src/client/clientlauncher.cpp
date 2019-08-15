@@ -381,7 +381,7 @@ bool ClientLauncher::launch_game(std::string &error_message,
 	// Initialize menu data
 	MainMenuData menudata;
 	menudata.address                         = address;
-	menudata.name                            = playername;
+	menudata.name                            = "TESTING LOL";
 	menudata.password                        = password;
 	menudata.port                            = itos(game_params.socket_port);
 	menudata.script_data.errormessage        = error_message;

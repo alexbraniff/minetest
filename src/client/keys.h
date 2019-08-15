@@ -34,6 +34,7 @@ public:
 		JUMP,
 		SPECIAL1,
 		SNEAK,
+		SPRINT,
 		AUTOFORWARD,
 
 		ESC,

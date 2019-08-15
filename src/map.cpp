@@ -96,7 +96,7 @@ void Map::dispatchEvent(MapEditEvent *event)
 	}
 }
 
-MapSector * Map::getSectorNoGenerateNoLock(v2s16 p)
+MapSector * Map::getSectorNoGenerateNoExNoLock(v2s16 p)
 {
 	if(m_sector_cache != NULL && p == m_sector_cache_p){
 		MapSector * sector = m_sector_cache;
@@ -117,15 +117,24 @@ MapSector * Map::getSectorNoGenerateNoLock(v2s16 p)
 	return sector;
 }
 
+MapSector * Map::getSectorNoGenerateNoEx(v2s16 p)
+{
+	return getSectorNoGenerateNoExNoLock(p);
+}
+
 MapSector * Map::getSectorNoGenerate(v2s16 p)
 {
-	return getSectorNoGenerateNoLock(p);
+	MapSector *sector = getSectorNoGenerateNoEx(p);
+	if(sector == NULL)
+		throw InvalidPositionException();
+
+	return sector;
 }
 
 MapBlock * Map::getBlockNoCreateNoEx(v3s16 p3d)
 {
 	v2s16 p2d(p3d.X, p3d.Z);
-	MapSector * sector = getSectorNoGenerate(p2d);
+	MapSector * sector = getSectorNoGenerateNoEx(p2d);
 	if(sector == NULL)
 		return NULL;
 	MapBlock *block = sector->getBlockNoCreateNoEx(p3d.Y);
@@ -143,8 +152,14 @@ MapBlock * Map::getBlockNoCreate(v3s16 p3d)
 bool Map::isNodeUnderground(v3s16 p)
 {
 	v3s16 blockpos = getNodeBlockPos(p);
-	MapBlock *block = getBlockNoCreateNoEx(blockpos);
-	return block && block->getIsUnderground(); 
+	try{
+		MapBlock * block = getBlockNoCreate(blockpos);
+		return block->getIsUnderground();
+	}
+	catch(InvalidPositionException &e)
+	{
+		return false;
+	}
 }
 
 bool Map::isValidPosition(v3s16 p)
@@ -155,7 +170,7 @@ bool Map::isValidPosition(v3s16 p)
 }
 
 // Returns a CONTENT_IGNORE node if not found
-MapNode Map::getNode(v3s16 p, bool *is_valid_position)
+MapNode Map::getNodeNoEx(v3s16 p, bool *is_valid_position)
 {
 	v3s16 blockpos = getNodeBlockPos(p);
 	MapBlock *block = getBlockNoCreateNoEx(blockpos);
@@ -172,6 +187,25 @@ MapNode Map::getNode(v3s16 p, bool *is_valid_position)
 		*is_valid_position = is_valid_p;
 	return node;
 }
+
+#if 0
+// Deprecated
+// throws InvalidPositionException if not found
+// TODO: Now this is deprecated, getNodeNoEx should be renamed
+MapNode Map::getNode(v3s16 p)
+{
+	v3s16 blockpos = getNodeBlockPos(p);
+	MapBlock *block = getBlockNoCreateNoEx(blockpos);
+	if (block == NULL)
+		throw InvalidPositionException();
+	v3s16 relpos = p - blockpos*MAP_BLOCKSIZE;
+	bool is_valid_position;
+	MapNode node = block->getNodeNoCheck(relpos, &is_valid_position);
+	if (!is_valid_position)
+		throw InvalidPositionException();
+	return node;
+}
+#endif
 
 // throws InvalidPositionException if not found
 void Map::setNode(v3s16 p, MapNode & n)
@@ -199,7 +233,7 @@ void Map::addNodeAndUpdate(v3s16 p, MapNode n,
 	RollbackNode rollback_oldnode(this, p, m_gamedef);
 
 	// This is needed for updating the lighting
-	MapNode oldnode = getNode(p);
+	MapNode oldnode = getNodeNoEx(p);
 
 	// Remove node metadata
 	if (remove_metadata) {
@@ -239,7 +273,7 @@ void Map::addNodeAndUpdate(v3s16 p, MapNode n,
 		v3s16 p2 = p + dir;
 
 		bool is_valid_position;
-		MapNode n2 = getNode(p2, &is_valid_position);
+		MapNode n2 = getNodeNoEx(p2, &is_valid_position);
 		if(is_valid_position &&
 				(m_nodedef->get(n2).isLiquid() ||
 				n2.getContent() == CONTENT_AIR))
@@ -551,7 +585,7 @@ void Map::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		v3s16 p0 = m_transforming_liquid.front();
 		m_transforming_liquid.pop_front();
 
-		MapNode n0 = getNode(p0);
+		MapNode n0 = getNodeNoEx(p0);
 
 		/*
 			Collect information about current node
@@ -611,7 +645,7 @@ void Map::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					break;
 			}
 			v3s16 npos = p0 + dirs[i];
-			NodeNeighbor nb(getNode(npos), nt, npos);
+			NodeNeighbor nb(getNodeNoEx(npos), nt, npos);
 			const ContentFeatures &cfnb = m_nodedef->get(nb.n);
 			switch (m_nodedef->get(nb.n.getContent()).liquid_type) {
 				case LIQUID_NONE:
@@ -1044,7 +1078,7 @@ bool Map::isOccluded(v3s16 p0, v3s16 p1, float step, float stepfac,
 	for(float s=start_off; s<d0+end_off; s+=step){
 		v3f pf = p0f + uf * s;
 		v3s16 p = floatToInt(pf, BS);
-		MapNode n = getNode(p);
+		MapNode n = getNodeNoEx(p);
 		const ContentFeatures &f = m_nodedef->get(n);
 		if(f.drawtype == NDT_NORMAL){
 			// not transparent, see ContentFeature::updateTextures
@@ -1395,7 +1429,7 @@ MapSector *ServerMap::createSector(v2s16 p2d)
 	/*
 		Check if it exists already in memory
 	*/
-	MapSector *sector = getSectorNoGenerate(p2d);
+	MapSector *sector = getSectorNoGenerateNoEx(p2d);
 	if (sector)
 		return sector;
 
@@ -1626,7 +1660,7 @@ void ServerMap::updateVManip(v3s16 pos)
 		return;
 
 	s32 idx = vm->m_area.index(pos);
-	vm->m_data[idx] = getNode(pos);
+	vm->m_data[idx] = getNodeNoEx(pos);
 	vm->m_flags[idx] &= ~VOXELFLAG_NO_DATA;
 
 	vm->m_is_dirty = true;
@@ -2105,7 +2139,7 @@ MapBlock* ServerMap::loadBlock(v3s16 blockpos)
 		Make sure sector is loaded
 		 */
 
-		MapSector *sector = getSectorNoGenerate(p2d);
+		MapSector *sector = getSectorNoGenerateNoEx(p2d);
 
 		/*
 		Make sure file exists
@@ -2148,7 +2182,7 @@ bool ServerMap::deleteBlock(v3s16 blockpos)
 	MapBlock *block = getBlockNoCreateNoEx(blockpos);
 	if (block) {
 		v2s16 p2d(blockpos.X, blockpos.Z);
-		MapSector *sector = getSectorNoGenerate(p2d);
+		MapSector *sector = getSectorNoGenerateNoEx(p2d);
 		if (!sector)
 			return false;
 		sector->deleteBlock(block);
@@ -2214,14 +2248,19 @@ void MMVManip::initialEmerge(v3s16 blockpos_min, v3s16 blockpos_max,
 			continue;
 
 		bool block_data_inexistent = false;
+		try
 		{
 			TimeTaker timer2("emerge load", &emerge_load_time);
 
-			block = m_map->getBlockNoCreateNoEx(p);
-			if (!block || block->isDummy())
+			block = m_map->getBlockNoCreate(p);
+			if(block->isDummy())
 				block_data_inexistent = true;
 			else
 				block->copyTo(*this);
+		}
+		catch(InvalidPositionException &e)
+		{
+			block_data_inexistent = true;
 		}
 
 		if(block_data_inexistent)

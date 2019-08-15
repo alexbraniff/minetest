@@ -21,7 +21,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <utility>
 #include <stack>
-#include <unordered_set>
 
 #include "irrlichttypes_extrabloated.h"
 #include "inventorymanager.h"
@@ -31,7 +30,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/joystick_controller.h"
 #include "util/string.h"
 #include "util/enriched_string.h"
-#include "StyleSpec.h"
 
 class InventoryManager;
 class ISimpleTextureSource;
@@ -403,13 +401,6 @@ protected:
 			const std::vector<std::string> &v_pos);
 	v2s32 getRealCoordinateGeometry(const std::vector<std::string> &v_geom);
 
-	std::unordered_map<std::string, StyleSpec> theme_by_type;
-	std::unordered_map<std::string, StyleSpec> theme_by_name;
-	std::unordered_set<std::string> property_warned;
-
-	StyleSpec getStyleForElement(const std::string &type,
-			const std::string &name="", const std::string &parent_type="");
-
 	v2s32 padding;
 	v2f32 spacing;
 	v2s32 imgsize;
@@ -546,7 +537,6 @@ private:
 	void parsePosition(parserData *data, const std::string &element);
 	bool parseAnchorDirect(parserData *data, const std::string &element);
 	void parseAnchor(parserData *data, const std::string &element);
-	bool parseStyle(parserData *data, const std::string &element, bool style_type);
 
 	void tryClose();
 
@@ -577,6 +567,7 @@ private:
 	 * and the default value for the setting is true.
 	 */
 	bool m_remap_dbl_click;
+
 };
 
 class FormspecFormSource: public IFormSource

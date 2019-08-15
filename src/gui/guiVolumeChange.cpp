@@ -58,9 +58,6 @@ void GUIVolumeChange::removeChildren()
 
 	if (gui::IGUIElement *e = getElementFromId(ID_soundSlider))
 		e->remove();
-
-	if (gui::IGUIElement *e = getElementFromId(ID_soundMuteButton))
-		e->remove();
 }
 
 void GUIVolumeChange::regenerateGui(v2u32 screensize)
@@ -196,3 +193,4 @@ bool GUIVolumeChange::OnEvent(const SEvent& event)
 
 	return Parent ? Parent->OnEvent(event) : false;
 }
+

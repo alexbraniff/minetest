@@ -28,7 +28,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 using namespace irr;
 class Client;
-class GUIChatConsole;
 struct MapDrawControl;
 
 /*
@@ -64,7 +63,7 @@ public:
 	void init();
 	void update(const RunStats &stats, Client *client, MapDrawControl *draw_control,
 			const CameraOrientation &cam, const PointedThing &pointed_old,
-			const GUIChatConsole *chat_console, float dtime);
+			float dtime);
 
 	void initFlags();
 	const Flags &getFlags() const { return m_flags; }
@@ -82,10 +81,6 @@ public:
 	void showTranslatedStatusText(const char *str);
 	inline void clearStatusText() { m_statustext.clear(); }
 
-	const bool isChatVisible()
-	{
-		return m_flags.show_chat && m_recent_chat_count != 0 && m_profiler_current_page == 0;
-	}
 	void setChatText(const EnrichedString &chat_text, u32 recent_chat_count);
 
 	void updateProfiler();
@@ -119,7 +114,6 @@ private:
 	video::SColor m_statustext_initial_color;
 
 	gui::IGUIStaticText *m_guitext_chat = nullptr; // Chat text
-	u32 m_recent_chat_count = 0;
 
 	gui::IGUIStaticText *m_guitext_profiler = nullptr; // Profiler text
 	u8 m_profiler_current_page = 0;

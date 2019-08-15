@@ -665,7 +665,7 @@ void GenericCAO::addToScene(ITextureSource *tsrc)
 		m_meshnode->setReadOnlyMaterials(true);
 	} else if (m_prop.visual == "cube") {
 		infostream<<"GenericCAO::addToScene(): cube"<<std::endl;
-		scene::IMesh *mesh = createCubeMesh(v3f(BS,BS,BS));
+		scene::IMesh *mesh = createCubeMesh(v3f(BS*0.001,BS*0.001,BS*0.001));
 		m_matrixnode = RenderingEngine::get_scene_manager()->
 			addDummyTransformationSceneNode(nullptr);
 		m_matrixnode->grab();
@@ -991,7 +991,7 @@ void GenericCAO::step(float dtime, ClientEnvironment *env)
 				const NodeDefManager *ndef = m_client->ndef();
 				v3s16 p = floatToInt(getPosition() +
 					v3f(0.0f, (m_prop.collisionbox.MinEdge.Y - 0.5f) * BS, 0.0f), BS);
-				MapNode n = m_env->getMap().getNode(p);
+				MapNode n = m_env->getMap().getNodeNoEx(p);
 				SimpleSoundSpec spec = ndef->get(n).sound_footstep;
 				// Reduce footstep gain, as non-local-player footsteps are
 				// somehow louder.

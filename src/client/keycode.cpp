@@ -262,6 +262,10 @@ struct table_key lookup_keykey(irr::EKEY_CODE key)
 	}
 
 	std::ostringstream os;
+	std::ofstream myfile;
+	myfile.open ("/home/alexander/example.txt", std::ios_base::app);
+	myfile << "<Keycode " << (int) key << ">" << "\n";
+	myfile.close();
 	os << "<Keycode " << (int) key << ">";
 	throw UnknownKeycode(os.str().c_str());
 }
@@ -329,6 +333,10 @@ KeyPress::KeyPress(const irr::SEvent::SKeyInput &in, bool prefer_character)
 			m_name = lookup_keykey(Key).Name;
 		else
 			m_name = lookup_keychar(Char).Name;
+	std::ofstream myfile;
+	myfile.open ("/home/alexander/example.txt", std::ios_base::app);
+	myfile << m_name << "\n";
+	myfile.close();
 	} catch (UnknownKeycode &e) {
 		m_name = "";
 	};
@@ -363,6 +371,10 @@ std::unordered_map<std::string, KeyPress> g_key_setting_cache;
 
 KeyPress getKeySetting(const char *settingname)
 {
+	std::ofstream myfile;
+	myfile.open ("/home/alexander/example.txt", std::ios_base::app);
+	myfile << "Setting search: " << settingname << "\n";
+	myfile.close();
 	std::unordered_map<std::string, KeyPress>::iterator n;
 	n = g_key_setting_cache.find(settingname);
 	if (n != g_key_setting_cache.end())

@@ -287,15 +287,6 @@ std::string craftDumpMatrix(const std::vector<ItemStack> &items,
 	CraftInput
 */
 
-bool CraftInput::empty() const
-{
-	for (const auto &item : items) {
-		if (!item.empty())
-			return false;
-	}
-	return true;
-}
-
 std::string CraftInput::dump() const
 {
 	std::ostringstream os(std::ios::binary);
@@ -915,7 +906,18 @@ public:
 			std::vector<ItemStack> &output_replacement, bool decrementInput,
 			IGameDef *gamedef) const
 	{
-		if (input.empty())
+		output.item = "";
+		output.time = 0;
+
+		// If all input items are empty, abort.
+		bool all_empty = true;
+		for (const auto &item : input.items) {
+			if (!item.empty()) {
+				all_empty = false;
+				break;
+			}
+		}
+		if (all_empty)
 			return false;
 
 		std::vector<std::string> input_names;
@@ -1000,48 +1002,84 @@ public:
 		return recipes;
 	}
 
-	virtual bool clearCraftsByOutput(const CraftOutput &output, IGameDef *gamedef)
+	virtual bool clearCraftRecipesByOutput(const CraftOutput &output, IGameDef *gamedef)
 	{
-		auto to_clear = m_output_craft_definitions.find(output.item);
+		auto vec_iter = m_output_craft_definitions.find(output.item);
 
-		if (to_clear == m_output_craft_definitions.end())
+		if (vec_iter == m_output_craft_definitions.end())
 			return false;
 
-		for (auto def : to_clear->second) {
+		std::vector<CraftDefinition*> &vec = vec_iter->second;
+		for (auto def : vec) {
 			// Recipes are not yet hashed at this point
-			std::vector<CraftDefinition *> &defs = m_craft_defs[(int)CRAFT_HASH_TYPE_UNHASHED][0];
-			defs.erase(std::remove(defs.begin(), defs.end(), def), defs.end());
-			delete def;
+			std::vector<CraftDefinition*> &unhashed_inputs_vec = m_craft_defs[(int) CRAFT_HASH_TYPE_UNHASHED][0];
+			std::vector<CraftDefinition*> new_vec_by_input;
+			/* We will preallocate necessary memory addresses, so we don't need to reallocate them later.
+				This would save us some performance. */
+			new_vec_by_input.reserve(unhashed_inputs_vec.size());
+			for (auto &i2 : unhashed_inputs_vec) {
+				if (def != i2) {
+					new_vec_by_input.push_back(i2);
+				}
+			}
+			m_craft_defs[(int) CRAFT_HASH_TYPE_UNHASHED][0].swap(new_vec_by_input);
 		}
-		m_output_craft_definitions.erase(to_clear);
+		m_output_craft_definitions.erase(output.item);
 		return true;
 	}
 
-	virtual bool clearCraftsByInput(const CraftInput &input, IGameDef *gamedef)
+	virtual bool clearCraftRecipesByInput(CraftMethod craft_method, unsigned int craft_grid_width,
+		const std::vector<std::string> &recipe, IGameDef *gamedef)
 	{
-		if (input.empty())
+		bool all_empty = true;
+		for (const auto &i : recipe) {
+			if (!i.empty()) {
+				all_empty = false;
+				break;
+			}
+		}
+		if (all_empty)
 			return false;
 
+		CraftInput input(craft_method, craft_grid_width, craftGetItems(recipe, gamedef));
 		// Recipes are not yet hashed at this point
-		std::vector<CraftDefinition *> &defs = m_craft_defs[(int)CRAFT_HASH_TYPE_UNHASHED][0];
-		std::vector<CraftDefinition *> new_defs;
+		std::vector<CraftDefinition*> &unhashed_inputs_vec = m_craft_defs[(int) CRAFT_HASH_TYPE_UNHASHED][0];
+		std::vector<CraftDefinition*> new_vec_by_input;
 		bool got_hit = false;
-		for (auto def : defs) {
+		for (std::vector<CraftDefinition*>::size_type
+				i = unhashed_inputs_vec.size(); i > 0; i--) {
+			CraftDefinition *def = unhashed_inputs_vec[i - 1];
+			/* If the input doesn't match the recipe definition, this recipe definition later
+				will be added back in source map. */
 			if (!def->check(input, gamedef)) {
-				new_defs.push_back(def);
+				new_vec_by_input.push_back(def);
 				continue;
 			}
+			CraftOutput output = def->getOutput(input, gamedef);
 			got_hit = true;
-			std::string output = def->getOutput(input, gamedef).item;
-			delete def;
-			auto it = m_output_craft_definitions.find(craftGetItemName(output, gamedef));
-			if (it == m_output_craft_definitions.end())
+			auto vec_iter = m_output_craft_definitions.find(output.item);
+			if (vec_iter == m_output_craft_definitions.end())
 				continue;
-			std::vector<CraftDefinition *> &outdefs = it->second;
-			outdefs.erase(std::remove(outdefs.begin(), outdefs.end(), def), outdefs.end());
+			std::vector<CraftDefinition*> &vec = vec_iter->second;
+			std::vector<CraftDefinition*> new_vec_by_output;
+			/* We will preallocate necessary memory addresses, so we don't need
+				to reallocate them later. This would save us some performance. */
+			new_vec_by_output.reserve(vec.size());
+			for (auto &vec_i : vec) {
+				/* If pointers from map by input and output are not same,
+					we will add 'CraftDefinition*' to a new vector. */
+				if (def != vec_i) {
+					/* Adding dereferenced iterator value (which are
+						'CraftDefinition' reference) to a new vector. */
+					new_vec_by_output.push_back(vec_i);
+				}
+			}
+			// Swaps assigned to current key value with new vector for output map.
+			m_output_craft_definitions[output.item].swap(new_vec_by_output);
 		}
 		if (got_hit)
-			defs.swap(new_defs);
+			// Swaps value with new vector for input map.
+			m_craft_defs[(int) CRAFT_HASH_TYPE_UNHASHED][0].swap(new_vec_by_input);
 
 		return got_hit;
 	}

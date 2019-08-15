@@ -17,7 +17,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include <IrrCompileConfig.h>
 #include "settings.h"
 #include "porting.h"
 #include "filesys.h"
@@ -71,7 +70,8 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("keymap_left", "KEY_KEY_A");
 	settings->setDefault("keymap_right", "KEY_KEY_D");
 	settings->setDefault("keymap_jump", "KEY_SPACE");
-	settings->setDefault("keymap_sneak", "KEY_LSHIFT");
+	settings->setDefault("keymap_sneak", "KEY_LCONTROL");
+	settings->setDefault("keymap_sprint", "KEY_LSHIFT");
 	settings->setDefault("keymap_drop", "KEY_KEY_Q");
 	settings->setDefault("keymap_zoom", "KEY_KEY_Z");
 	settings->setDefault("keymap_inventory", "KEY_KEY_I");
@@ -183,15 +183,7 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("lighting_boost_spread", "0.2");
 	settings->setDefault("texture_path", "");
 	settings->setDefault("shader_path", "");
-#if ENABLE_GLES
-#ifdef _IRR_COMPILE_WITH_OGLES1_
-	settings->setDefault("video_driver", "ogles1");
-#else
-	settings->setDefault("video_driver", "ogles2");
-#endif
-#else
 	settings->setDefault("video_driver", "opengl");
-#endif
 	settings->setDefault("cinematic", "false");
 	settings->setDefault("camera_smoothing", "0");
 	settings->setDefault("cinematic_camera_smoothing", "0.7");
@@ -226,11 +218,7 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("texture_clean_transparent", "false");
 	settings->setDefault("texture_min_size", "64");
 	settings->setDefault("ambient_occlusion_gamma", "2.2");
-#if ENABLE_GLES
-	settings->setDefault("enable_shaders", "false");
-#else
 	settings->setDefault("enable_shaders", "true");
-#endif
 	settings->setDefault("enable_particles", "true");
 	settings->setDefault("arm_inertia", "true");
 
@@ -356,7 +344,6 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("kick_msg_crash", "This server has experienced an internal error. You will now be disconnected.");
 	settings->setDefault("ask_reconnect_on_crash", "false");
 
-	settings->setDefault("chat_message_format", "<@name> @message");
 	settings->setDefault("profiler_print_interval", "0");
 	settings->setDefault("active_object_send_range_blocks", "4");
 	settings->setDefault("active_block_range", "3");
@@ -397,15 +384,16 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("movement_acceleration_default", "3");
 	settings->setDefault("movement_acceleration_air", "2");
 	settings->setDefault("movement_acceleration_fast", "10");
-	settings->setDefault("movement_speed_walk", "4");
-	settings->setDefault("movement_speed_crouch", "1.35");
+	settings->setDefault("movement_speed_walk", "6");
+	settings->setDefault("movement_speed_crouch", "3");
+	settings->setDefault("movement_speed_sprint", "11");
 	settings->setDefault("movement_speed_fast", "20");
 	settings->setDefault("movement_speed_climb", "3");
-	settings->setDefault("movement_speed_jump", "6.5");
+	settings->setDefault("movement_speed_jump", "12.0");
 	settings->setDefault("movement_liquid_fluidity", "1");
 	settings->setDefault("movement_liquid_fluidity_smooth", "0.5");
 	settings->setDefault("movement_liquid_sink", "10");
-	settings->setDefault("movement_gravity", "9.81");
+	settings->setDefault("movement_gravity", "14.715");
 
 	// Liquids
 	settings->setDefault("liquid_loop_max", "100000");
@@ -443,7 +431,9 @@ void set_default_settings(Settings *settings)
 #ifdef __ANDROID__
 	settings->setDefault("screen_w", "0");
 	settings->setDefault("screen_h", "0");
+	settings->setDefault("enable_shaders", "false");
 	settings->setDefault("fullscreen", "true");
+	settings->setDefault("video_driver", "ogles1");
 	settings->setDefault("touchtarget", "true");
 	settings->setDefault("TMPFolder", porting::getDataPath("tmp" DIR_DELIM));
 	settings->setDefault("touchscreen_threshold","20");

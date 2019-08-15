@@ -221,8 +221,6 @@ private:
 	/** script basefolder */
 	std::string              m_scriptdir = "";
 
-	void setFormspecPrepend(const std::string &fs);
-
 	/**
 	 * draw background layer
 	 * @param driver to use for drawing

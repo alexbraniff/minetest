@@ -227,13 +227,12 @@ public:
 	void handleCommand_SrpBytesSandB(NetworkPacket *pkt);
 	void handleCommand_FormspecPrepend(NetworkPacket *pkt);
 	void handleCommand_CSMRestrictionFlags(NetworkPacket *pkt);
-	void handleCommand_PlayerSpeed(NetworkPacket *pkt);
 
 	void ProcessData(NetworkPacket *pkt);
 
 	void Send(NetworkPacket* pkt);
 
-	void interact(InteractAction action, const PointedThing &pointed);
+	void interact(u8 action, const PointedThing& pointed);
 
 	void sendNodemetaFields(v3s16 p, const std::string &formname,
 		const StringMap &fields);
@@ -272,6 +271,10 @@ public:
 
 	void setPlayerControl(PlayerControl &control);
 
+	void selectPlayerItem(u16 item);
+	u16 getPlayerItem() const
+	{ return m_playeritem; }
+
 	// Returns true if the inventory of the local player has been
 	// updated from the server. If it is true, it is set to false.
 	bool getLocalInventoryUpdated();
@@ -281,9 +284,6 @@ public:
 	/* InventoryManager interface */
 	Inventory* getInventory(const InventoryLocation &loc) override;
 	void inventoryAction(InventoryAction *a) override;
-
-	// Send the item number 'item' as player item to the server
-	void setPlayerItem(u16 item);
 
 	const std::list<std::string> &getConnectedPlayerNames()
 	{
@@ -454,6 +454,8 @@ private:
 	void Receive();
 
 	void sendPlayerPos();
+	// Send the item number 'item' as player item to the server
+	void sendPlayerItem(u16 item);
 
 	void deleteAuthData();
 	// helper method shared with clientpackethandler
@@ -463,7 +465,7 @@ private:
 	void promptConfirmRegistration(AuthMechanism chosen_auth_mechanism);
 	void startAuth(AuthMechanism chosen_auth_mechanism);
 	void sendDeletedBlocks(std::vector<v3s16> &blocks);
-	void sendGotBlocks(const std::vector<v3s16> &blocks);
+	void sendGotBlocks(v3s16 block);
 	void sendRemovedSounds(std::vector<s32> &soundList);
 
 	// Helper function
@@ -504,6 +506,7 @@ private:
 	// If 0, server init hasn't been received yet.
 	u16 m_proto_ver = 0;
 
+	u16 m_playeritem = 0;
 	bool m_inventory_updated = false;
 	Inventory *m_inventory_from_server = nullptr;
 	float m_inventory_from_server_age = 0.0f;

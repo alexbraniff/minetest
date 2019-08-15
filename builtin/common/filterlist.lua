@@ -250,6 +250,7 @@ end
 
 --------------------------------------------------------------------------------
 function compare_worlds(world1,world2)
+
 	if world1.path ~= world2.path then
 		return false
 	end

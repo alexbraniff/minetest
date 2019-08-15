@@ -37,6 +37,7 @@ void KeyCache::populate()
 	key[KeyType::JUMP] = getKeySetting("keymap_jump");
 	key[KeyType::SPECIAL1] = getKeySetting("keymap_special1");
 	key[KeyType::SNEAK] = getKeySetting("keymap_sneak");
+	key[KeyType::SPRINT] = getKeySetting("keymap_sprint");
 
 	key[KeyType::AUTOFORWARD] = getKeySetting("keymap_autoforward");
 

@@ -65,7 +65,6 @@ endif
 
 LOCAL_CFLAGS := -D_IRR_ANDROID_PLATFORM_      \
 		-DHAVE_TOUCHSCREENGUI         \
-		-DENABLE_GLES=1               \
 		-DUSE_CURL=1                  \
 		-DUSE_SOUND=1                 \
 		-DUSE_FREETYPE=1              \
@@ -178,7 +177,6 @@ LOCAL_SRC_FILES := \
 		jni/src/filesys.cpp                       \
 		jni/src/genericobject.cpp                 \
 		jni/src/gettext.cpp                       \
-		jni/src/gui/guiButton.cpp                 \
 		jni/src/gui/guiChatConsole.cpp            \
 		jni/src/gui/guiConfirmRegistration.cpp    \
 		jni/src/gui/guiEditBoxWithScrollbar.cpp   \
@@ -188,7 +186,6 @@ LOCAL_SRC_FILES := \
 		jni/src/gui/guiPasswordChange.cpp         \
 		jni/src/gui/guiPathSelectMenu.cpp         \
 		jni/src/gui/guiScrollBar.cpp              \
-		jni/src/gui/guiSkin.cpp                   \
 		jni/src/gui/guiTable.cpp                  \
 		jni/src/gui/guiVolumeChange.cpp           \
 		jni/src/gui/intlGUIEditBox.cpp            \

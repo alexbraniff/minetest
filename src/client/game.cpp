@@ -689,8 +689,8 @@ protected:
 	bool handleCallbacks();
 	void processQueues();
 	void updateProfilers(const RunStats &stats, const FpsControl &draw_times, f32 dtime);
+	void addProfilerGraphs(const RunStats &stats, const FpsControl &draw_times, f32 dtime);
 	void updateStats(RunStats *stats, const FpsControl &draw_times, f32 dtime);
-	void updateProfilerGraphs(ProfilerGraph *graph);
 
 	// Input related
 	void processUserInput(f32 dtime);
@@ -744,13 +744,15 @@ protected:
 			bool look_for_object, const v3s16 &camera_offset);
 	void handlePointingAtNothing(const ItemStack &playerItem);
 	void handlePointingAtNode(const PointedThing &pointed,
-			const ItemStack &selected_item, const ItemStack &hand_item, f32 dtime);
+		const ItemDefinition &playeritem_def, const ItemStack &playeritem,
+		const ToolCapabilities &playeritem_toolcap, f32 dtime);
 	void handlePointingAtObject(const PointedThing &pointed, const ItemStack &playeritem,
 			const v3f &player_position, bool show_debug);
 	void handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
-			const ItemStack &selected_item, const ItemStack &hand_item, f32 dtime);
+			const ToolCapabilities &playeritem_toolcap, f32 dtime);
 	void updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 			const CameraOrientation &cam);
+	void updateProfilerGraphs(ProfilerGraph *graph);
 
 	// Misc
 	void limitFps(FpsControl *fps_timings, f32 *dtime);
@@ -802,8 +804,8 @@ private:
 
 	void updateChat(f32 dtime, const v2u32 &screensize);
 
-	bool nodePlacementPrediction(const ItemDefinition &selected_def,
-		const ItemStack &selected_item, const v3s16 &nodepos, const v3s16 &neighbourpos);
+	bool nodePlacementPrediction(const ItemDefinition &playeritem_def,
+		const ItemStack &playeritem, const v3s16 &nodepos, const v3s16 &neighbourpos);
 	static const ClientEventHandler clientEventHandler[CLIENTEVENT_MAX];
 
 	InputHandler *input = nullptr;
@@ -835,6 +837,7 @@ private:
 	Camera *camera = nullptr;
 	Clouds *clouds = nullptr;	                  // Free using ->Drop()
 	Sky *sky = nullptr;                         // Free using ->Drop()
+	Inventory *local_inventory = nullptr;
 	Hud *hud = nullptr;
 	Minimap *mapper = nullptr;
 
@@ -948,6 +951,7 @@ Game::~Game()
 	delete server; // deleted first to stop all server threads
 
 	delete hud;
+	delete local_inventory;
 	delete camera;
 	delete quicktune;
 	delete eventmgr;
@@ -1081,12 +1085,10 @@ void Game::run()
 			previous_screen_size = current_screen_size;
 		}
 
-		// Calculate dtime =
-		//    RenderingEngine::run() from this iteration
-		//  + Sleep time until the wanted FPS are reached
+		/* Must be called immediately after a device->run() call because it
+		 * uses device->getTimer()->getTime()
+		 */
 		limitFps(&draw_times, &dtime);
-		
-		// Prepare render data for next iteration
 
 		updateStats(&stats, draw_times, dtime);
 		updateInteractTimers(dtime);
@@ -1347,8 +1349,10 @@ bool Game::createClient(const std::string &playername,
 	scsf->setSky(sky);
 	skybox = NULL;	// This is used/set later on in the main run loop
 
-	if (!sky) {
-		*error_message = "Memory allocation error sky";
+	local_inventory = new Inventory(itemdef_manager);
+
+	if (!(sky && local_inventory)) {
+		*error_message = "Memory allocation error (sky or local inventory)";
 		errorstream << *error_message << std::endl;
 		return false;
 	}
@@ -1380,7 +1384,7 @@ bool Game::createClient(const std::string &playername,
 	player->hurt_tilt_timer = 0;
 	player->hurt_tilt_strength = 0;
 
-	hud = new Hud(guienv, client, player, &player->inventory);
+	hud = new Hud(guienv, client, player, local_inventory);
 
 	if (!hud) {
 		*error_message = "Memory error: could not create HUD";
@@ -1723,8 +1727,7 @@ void Game::processQueues()
 }
 
 
-void Game::updateProfilers(const RunStats &stats, const FpsControl &draw_times,
-		f32 dtime)
+void Game::updateProfilers(const RunStats &stats, const FpsControl &draw_times, f32 dtime)
 {
 	float profiler_print_interval =
 			g_settings->getFloat("profiler_print_interval");
@@ -1732,7 +1735,7 @@ void Game::updateProfilers(const RunStats &stats, const FpsControl &draw_times,
 
 	if (profiler_print_interval == 0) {
 		print_to_log = false;
-		profiler_print_interval = 3;
+		profiler_print_interval = 5;
 	}
 
 	if (profiler_interval.step(dtime, profiler_print_interval)) {
@@ -1745,13 +1748,24 @@ void Game::updateProfilers(const RunStats &stats, const FpsControl &draw_times,
 		g_profiler->clear();
 	}
 
-	// Update update graphs
-	g_profiler->graphAdd("Time non-rendering [ms]",
-		draw_times.busy_time - stats.drawtime);
-
-	g_profiler->graphAdd("Sleep [ms]", draw_times.sleep_time);
-	g_profiler->graphAdd("FPS", 1.0f / dtime);
+	addProfilerGraphs(stats, draw_times, dtime);
 }
+
+
+void Game::addProfilerGraphs(const RunStats &stats,
+		const FpsControl &draw_times, f32 dtime)
+{
+	g_profiler->graphAdd("mainloop_other",
+			draw_times.busy_time / 1000.0f - stats.drawtime / 1000.0f);
+
+	if (draw_times.sleep_time != 0)
+		g_profiler->graphAdd("mainloop_sleep", draw_times.sleep_time / 1000.0f);
+	g_profiler->graphAdd("mainloop_dtime", dtime);
+
+	g_profiler->add("Elapsed time", dtime);
+	g_profiler->avg("FPS", 1. / dtime);
+}
+
 
 void Game::updateStats(RunStats *stats, const FpsControl &draw_times,
 		f32 dtime)
@@ -1963,7 +1977,7 @@ void Game::processItemSelection(u16 *new_playeritem)
 
 	/* Item selection using mouse wheel
 	 */
-	*new_playeritem = player->getWieldIndex();
+	*new_playeritem = client->getPlayerItem();
 
 	s32 wheel = input->getMouseWheel();
 	u16 max_item = MYMIN(PLAYER_INVENTORY_SIZE - 1,
@@ -2005,7 +2019,7 @@ void Game::dropSelectedItem(bool single_item)
 	a->count = single_item ? 1 : 0;
 	a->from_inv.setCurrentPlayer();
 	a->from_list = "main";
-	a->from_i = client->getEnv().getLocalPlayer()->getWieldIndex();
+	a->from_i = client->getPlayerItem();
 	client->inventoryAction(a);
 }
 
@@ -2416,6 +2430,10 @@ void Game::updatePlayerControl(const CameraOrientation &cam)
 	// buttons, as the code that uses the controls needs to be able to
 	// distinguish between the two in order to know when to use joysticks.
 
+		std::ofstream myfile;
+		myfile.open ("/home/alexander/example.txt");
+		myfile << "Sprint down: " << isKeyDown(KeyType::SPRINT) << " - " << ((u32)(isKeyDown(KeyType::SPRINT)                        & 0x1) << 7) << "\n";
+		myfile.close();
 	PlayerControl control(
 		input->isKeyDown(KeyType::FORWARD),
 		input->isKeyDown(KeyType::BACKWARD),
@@ -2424,6 +2442,7 @@ void Game::updatePlayerControl(const CameraOrientation &cam)
 		isKeyDown(KeyType::JUMP),
 		isKeyDown(KeyType::SPECIAL1),
 		isKeyDown(KeyType::SNEAK),
+		isKeyDown(KeyType::SPRINT),
 		isKeyDown(KeyType::ZOOM),
 		input->getLeftState(),
 		input->getRightState(),
@@ -2441,8 +2460,9 @@ void Game::updatePlayerControl(const CameraOrientation &cam)
 			( (u32)(isKeyDown(KeyType::JUMP)                          & 0x1) << 4) |
 			( (u32)(isKeyDown(KeyType::SPECIAL1)                      & 0x1) << 5) |
 			( (u32)(isKeyDown(KeyType::SNEAK)                         & 0x1) << 6) |
-			( (u32)(input->getLeftState()                             & 0x1) << 7) |
-			( (u32)(input->getRightState()                            & 0x1) << 8
+			( (u32)(isKeyDown(KeyType::SPRINT)                        & 0x1) << 7) |
+			( (u32)(input->getLeftState()                             & 0x1) << 8) |
+			( (u32)(input->getRightState()                            & 0x1) << 9
 		);
 
 #ifdef ANDROID
@@ -2833,9 +2853,18 @@ void Game::updateCamera(u32 busy_time, f32 dtime)
 	*/
 	ItemStack playeritem;
 	{
-		ItemStack selected, hand;
-		playeritem = player->getWieldedItem(&selected, &hand);
+		InventoryList *mlist = local_inventory->getList("main");
+
+		if (mlist && client->getPlayerItem() < mlist->getSize())
+			playeritem = mlist->getItem(client->getPlayerItem());
 	}
+
+	if (playeritem.getDefinition(itemdef_manager).name.empty()) { // override the hand
+		InventoryList *hlist = local_inventory->getList("hand");
+		if (hlist)
+			playeritem = hlist->getItem(0);
+	}
+
 
 	ToolCapabilities playeritem_toolcap =
 		playeritem.getToolCapabilities(itemdef_manager);
@@ -2917,7 +2946,7 @@ void Game::updateSound(f32 dtime)
 		soundmaker->step(dtime);
 
 	ClientMap &map = client->getEnv().getClientMap();
-	MapNode n = map.getNode(player->getFootstepNodePos());
+	MapNode n = map.getNodeNoEx(player->getFootstepNodePos());
 	soundmaker->m_player_step_sound = nodedef_manager->get(n).sound_footstep;
 }
 
@@ -2925,6 +2954,20 @@ void Game::updateSound(f32 dtime)
 void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 {
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
+
+	ItemStack playeritem;
+	{
+		InventoryList *mlist = local_inventory->getList("main");
+
+		if (mlist && client->getPlayerItem() < mlist->getSize())
+			playeritem = mlist->getItem(client->getPlayerItem());
+	}
+
+	const ItemDefinition &playeritem_def =
+			playeritem.getDefinition(itemdef_manager);
+	InventoryList *hlist = local_inventory->getList("hand");
+	const ItemDefinition &hand_def =
+		hlist ? hlist->getItem(0).getDefinition(itemdef_manager) : itemdef_manager->get("");
 
 	v3f player_position  = player->getPosition();
 	v3f player_eye_position = player->getEyePosition();
@@ -2941,11 +2984,13 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 		Calculate what block is the crosshair pointing to
 	*/
 
-	ItemStack selected_item, hand_item;
-	const ItemStack &tool_item = player->getWieldedItem(&selected_item, &hand_item);
+	f32 d = playeritem_def.range; // max. distance
+	f32 d_hand = hand_def.range;
 
-	const ItemDefinition &selected_def = selected_item.getDefinition(itemdef_manager);
-	f32 d = getToolRange(selected_def, hand_item.getDefinition(itemdef_manager));
+	if (d < 0 && d_hand >= 0)
+		d = d_hand;
+	else if (d < 0)
+		d = 4.0;
 
 	core::line3d<f32> shootline;
 
@@ -2953,7 +2998,7 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 		shootline = core::line3d<f32>(player_eye_position,
 			player_eye_position + camera_direction * BS * d);
 	} else {
-		// prevent player pointing anything in front-view
+	    // prevent player pointing anything in front-view
 		shootline = core::line3d<f32>(camera_position, camera_position);
 	}
 
@@ -2971,7 +3016,7 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 #endif
 
 	PointedThing pointed = updatePointedThing(shootline,
-			selected_def.liquids_pointable,
+			playeritem_def.liquids_pointable,
 			!runData.ldown_for_dig,
 			camera_offset);
 
@@ -2993,7 +3038,7 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 	if (runData.digging) {
 		if (input->getLeftReleased()) {
 			infostream << "Left button released"
-					<< " (stopped digging)" << std::endl;
+			           << " (stopped digging)" << std::endl;
 			runData.digging = false;
 		} else if (pointed != runData.pointed_old) {
 			if (pointed.type == POINTEDTHING_NODE
@@ -3004,14 +3049,14 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 				// Don't reset.
 			} else {
 				infostream << "Pointing away from node"
-						<< " (stopped digging)" << std::endl;
+				           << " (stopped digging)" << std::endl;
 				runData.digging = false;
 				hud->updateSelectionMesh(camera_offset);
 			}
 		}
 
 		if (!runData.digging) {
-			client->interact(INTERACT_STOP_DIGGING, runData.pointed_old);
+			client->interact(1, runData.pointed_old);
 			client->setCrack(-1, v3s16(0, 0, 0));
 			runData.dig_time = 0.0;
 		}
@@ -3035,20 +3080,30 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 	else
 		runData.repeat_rightclick_timer = 0;
 
-
-	if (selected_def.usable && input->getLeftState()) {
+	if (playeritem_def.usable && input->getLeftState()) {
 		if (input->getLeftClicked() && (!client->moddingEnabled()
-				|| !client->getScript()->on_item_use(selected_item, pointed)))
-			client->interact(INTERACT_USE, pointed);
+				|| !client->getScript()->on_item_use(playeritem, pointed)))
+			client->interact(4, pointed);
 	} else if (pointed.type == POINTEDTHING_NODE) {
-		handlePointingAtNode(pointed, selected_item, hand_item, dtime);
+		ToolCapabilities playeritem_toolcap =
+				playeritem.getToolCapabilities(itemdef_manager);
+		if (playeritem.name.empty()) {
+			const ToolCapabilities *handToolcap = hlist
+				? &hlist->getItem(0).getToolCapabilities(itemdef_manager)
+				: itemdef_manager->get("").tool_capabilities;
+
+			if (handToolcap != nullptr)
+				playeritem_toolcap = *handToolcap;
+		}
+		handlePointingAtNode(pointed, playeritem_def, playeritem,
+			playeritem_toolcap, dtime);
 	} else if (pointed.type == POINTEDTHING_OBJECT) {
-		handlePointingAtObject(pointed, tool_item, player_position, show_debug);
+		handlePointingAtObject(pointed, playeritem, player_position, show_debug);
 	} else if (input->getLeftState()) {
 		// When button is held down in air, show continuous animation
 		runData.left_punch = true;
 	} else if (input->getRightClicked()) {
-		handlePointingAtNothing(selected_item);
+		handlePointingAtNothing(playeritem);
 	}
 
 	runData.pointed_old = pointed;
@@ -3096,7 +3151,7 @@ PointedThing Game::updatePointedThing(
 		}
 	} else if (result.type == POINTEDTHING_NODE) {
 		// Update selection boxes
-		MapNode n = map.getNode(result.node_undersurface);
+		MapNode n = map.getNodeNoEx(result.node_undersurface);
 		std::vector<aabb3f> boxes;
 		n.getSelectionBoxes(nodedef, &boxes,
 			n.getNeighbors(result.node_undersurface, &map));
@@ -3123,12 +3178,12 @@ PointedThing Game::updatePointedThing(
 		v3s16 p = floatToInt(pf, BS);
 
 		// Get selection mesh light level
-		MapNode n = map.getNode(p);
+		MapNode n = map.getNodeNoEx(p);
 		u16 node_light = getInteriorLight(n, -1, nodedef);
 		u16 light_level = node_light;
 
 		for (const v3s16 &dir : g_6dirs) {
-			n = map.getNode(p + dir);
+			n = map.getNodeNoEx(p + dir);
 			node_light = getInteriorLight(n, -1, nodedef);
 			if (node_light > light_level)
 				light_level = node_light;
@@ -3160,12 +3215,13 @@ void Game::handlePointingAtNothing(const ItemStack &playerItem)
 	infostream << "Right Clicked in Air" << std::endl;
 	PointedThing fauxPointed;
 	fauxPointed.type = POINTEDTHING_NOTHING;
-	client->interact(INTERACT_ACTIVATE, fauxPointed);
+	client->interact(5, fauxPointed);
 }
 
 
 void Game::handlePointingAtNode(const PointedThing &pointed,
-	const ItemStack &selected_item, const ItemStack &hand_item, f32 dtime)
+	const ItemDefinition &playeritem_def, const ItemStack &playeritem,
+	const ToolCapabilities &playeritem_toolcap, f32 dtime)
 {
 	v3s16 nodepos = pointed.node_undersurface;
 	v3s16 neighbourpos = pointed.node_abovesurface;
@@ -3179,7 +3235,7 @@ void Game::handlePointingAtNode(const PointedThing &pointed,
 	if (runData.nodig_delay_timer <= 0.0 && input->getLeftState()
 			&& !runData.digging_blocked
 			&& client->checkPrivilege("interact")) {
-		handleDigging(pointed, nodepos, selected_item, hand_item, dtime);
+		handleDigging(pointed, nodepos, playeritem_toolcap, dtime);
 	}
 
 	// This should be done after digging handling
@@ -3189,7 +3245,7 @@ void Game::handlePointingAtNode(const PointedThing &pointed,
 		m_game_ui->setInfoText(unescape_translate(utf8_to_wide(
 			meta->getString("infotext"))));
 	} else {
-		MapNode n = map.getNode(nodepos);
+		MapNode n = map.getNodeNoEx(nodepos);
 
 		if (nodedef_manager->get(n).tiledef[0].name == "unknown_node.png") {
 			m_game_ui->setInfoText(L"Unknown node: " +
@@ -3206,8 +3262,8 @@ void Game::handlePointingAtNode(const PointedThing &pointed,
 		if (meta && !meta->getString("formspec").empty() && !random_input
 				&& !isKeyDown(KeyType::SNEAK)) {
 			// Report right click to server
-			if (nodedef_manager->get(map.getNode(nodepos)).rightclickable) {
-				client->interact(INTERACT_PLACE, pointed);
+			if (nodedef_manager->get(map.getNodeNoEx(nodepos)).rightclickable) {
+				client->interact(3, pointed);
 			}
 
 			infostream << "Launching custom inventory view" << std::endl;
@@ -3231,63 +3287,62 @@ void Game::handlePointingAtNode(const PointedThing &pointed,
 
 			// If the wielded item has node placement prediction,
 			// make that happen
-			auto &def = selected_item.getDefinition(itemdef_manager);
-			bool placed = nodePlacementPrediction(def, selected_item, nodepos,
+			bool placed = nodePlacementPrediction(playeritem_def, playeritem, nodepos,
 				neighbourpos);
 
 			if (placed) {
 				// Report to server
-				client->interact(INTERACT_PLACE, pointed);
+				client->interact(3, pointed);
 				// Read the sound
 				soundmaker->m_player_rightpunch_sound =
-						def.sound_place;
+						playeritem_def.sound_place;
 
 				if (client->moddingEnabled())
-					client->getScript()->on_placenode(pointed, def);
+					client->getScript()->on_placenode(pointed, playeritem_def);
 			} else {
 				soundmaker->m_player_rightpunch_sound =
 						SimpleSoundSpec();
 
-				if (def.node_placement_prediction.empty() ||
-						nodedef_manager->get(map.getNode(nodepos)).rightclickable) {
-					client->interact(INTERACT_PLACE, pointed); // Report to server
+				if (playeritem_def.node_placement_prediction.empty() ||
+						nodedef_manager->get(map.getNodeNoEx(nodepos)).rightclickable) {
+					client->interact(3, pointed); // Report to server
 				} else {
 					soundmaker->m_player_rightpunch_sound =
-						def.sound_place_failed;
+						playeritem_def.sound_place_failed;
 				}
 			}
 		}
 	}
 }
 
-bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
-	const ItemStack &selected_item, const v3s16 &nodepos, const v3s16 &neighbourpos)
+bool Game::nodePlacementPrediction(const ItemDefinition &playeritem_def,
+	const ItemStack &playeritem, const v3s16 &nodepos, const v3s16 &neighbourpos)
 {
-	std::string prediction = selected_def.node_placement_prediction;
+	std::string prediction = playeritem_def.node_placement_prediction;
 	const NodeDefManager *nodedef = client->ndef();
 	ClientMap &map = client->getEnv().getClientMap();
 	MapNode node;
 	bool is_valid_position;
 
-	node = map.getNode(nodepos, &is_valid_position);
+	node = map.getNodeNoEx(nodepos, &is_valid_position);
 	if (!is_valid_position)
 		return false;
 
 	if (!prediction.empty() && !(nodedef->get(node).rightclickable &&
 			!isKeyDown(KeyType::SNEAK))) {
 		verbosestream << "Node placement prediction for "
-			<< selected_item.name << " is "
+			<< playeritem_def.name << " is "
 			<< prediction << std::endl;
 		v3s16 p = neighbourpos;
 
 		// Place inside node itself if buildable_to
-		MapNode n_under = map.getNode(nodepos, &is_valid_position);
+		MapNode n_under = map.getNodeNoEx(nodepos, &is_valid_position);
 		if (is_valid_position)
 		{
 			if (nodedef->get(n_under).buildable_to)
 				p = nodepos;
 			else {
-				node = map.getNode(p, &is_valid_position);
+				node = map.getNodeNoEx(p, &is_valid_position);
 				if (is_valid_position &&!nodedef->get(node).buildable_to)
 					return false;
 			}
@@ -3299,7 +3354,7 @@ bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
 
 		if (!found) {
 			errorstream << "Node placement prediction failed for "
-				<< selected_item.name << " (places "
+				<< playeritem_def.name << " (places "
 				<< prediction
 				<< ") - Name not known" << std::endl;
 			return false;
@@ -3354,7 +3409,7 @@ bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
 			else
 				pp = p + v3s16(0, -1, 0);
 
-			if (!nodedef->get(map.getNode(pp)).walkable)
+			if (!nodedef->get(map.getNodeNoEx(pp)).walkable)
 				return false;
 		}
 
@@ -3362,7 +3417,7 @@ bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
 		if ((predicted_f.param_type_2 == CPT2_COLOR
 			|| predicted_f.param_type_2 == CPT2_COLORED_FACEDIR
 			|| predicted_f.param_type_2 == CPT2_COLORED_WALLMOUNTED)) {
-			const std::string &indexstr = selected_item.metadata.getString(
+			const std::string &indexstr = playeritem.metadata.getString(
 				"palette_index", 0);
 			if (!indexstr.empty()) {
 				s32 index = mystoi(indexstr);
@@ -3401,7 +3456,7 @@ bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
 			}
 		} catch (InvalidPositionException &e) {
 			errorstream << "Node placement prediction failed for "
-				<< selected_item.name << " (places "
+				<< playeritem_def.name << " (places "
 				<< prediction
 				<< ") - Position not loaded" << std::endl;
 		}
@@ -3410,8 +3465,8 @@ bool Game::nodePlacementPrediction(const ItemDefinition &selected_def,
 	return false;
 }
 
-void Game::handlePointingAtObject(const PointedThing &pointed,
-		const ItemStack &tool_item, const v3f &player_position, bool show_debug)
+void Game::handlePointingAtObject(const PointedThing &pointed, const ItemStack &playeritem,
+		const v3f &player_position, bool show_debug)
 {
 	std::wstring infotext = unescape_translate(
 		utf8_to_wide(runData.selected_object->infoText()));
@@ -3447,39 +3502,50 @@ void Game::handlePointingAtObject(const PointedThing &pointed,
 			// Report direct punch
 			v3f objpos = runData.selected_object->getPosition();
 			v3f dir = (objpos - player_position).normalize();
+			ItemStack item = playeritem;
+			if (playeritem.name.empty()) {
+				InventoryList *hlist = local_inventory->getList("hand");
+				if (hlist) {
+					item = hlist->getItem(0);
+				}
+			}
 
 			bool disable_send = runData.selected_object->directReportPunch(
-					dir, &tool_item, runData.time_from_last_punch);
+					dir, &item, runData.time_from_last_punch);
 			runData.time_from_last_punch = 0;
 
 			if (!disable_send)
-				client->interact(INTERACT_START_DIGGING, pointed);
+				client->interact(0, pointed);
 		}
 	} else if (input->getRightClicked()) {
 		infostream << "Right-clicked object" << std::endl;
-		client->interact(INTERACT_PLACE, pointed);  // place
+		client->interact(3, pointed);  // place
 	}
 }
 
 
 void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
-		const ItemStack &selected_item, const ItemStack &hand_item, f32 dtime)
+		const ToolCapabilities &playeritem_toolcap, f32 dtime)
 {
-	// See also: serverpackethandle.cpp, action == 2
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 	ClientMap &map = client->getEnv().getClientMap();
-	MapNode n = client->getEnv().getClientMap().getNode(nodepos);
+	MapNode n = client->getEnv().getClientMap().getNodeNoEx(nodepos);
 
 	// NOTE: Similar piece of code exists on the server side for
 	// cheat detection.
 	// Get digging parameters
 	DigParams params = getDigParams(nodedef_manager->get(n).groups,
-			&selected_item.getToolCapabilities(itemdef_manager));
+			&playeritem_toolcap);
 
 	// If can't dig, try hand
 	if (!params.diggable) {
-		params = getDigParams(nodedef_manager->get(n).groups,
-				&hand_item.getToolCapabilities(itemdef_manager));
+		InventoryList *hlist = local_inventory->getList("hand");
+		const ToolCapabilities *tp = hlist
+			? &hlist->getItem(0).getToolCapabilities(itemdef_manager)
+			: itemdef_manager->get("").tool_capabilities;
+
+		if (tp)
+			params = getDigParams(nodedef_manager->get(n).groups, tp);
 	}
 
 	if (!params.diggable) {
@@ -3500,7 +3566,7 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 		runData.dig_instantly = runData.dig_time_complete == 0;
 		if (client->moddingEnabled() && client->getScript()->on_punchnode(nodepos, n))
 			return;
-		client->interact(INTERACT_START_DIGGING, pointed);
+		client->interact(0, pointed);
 		runData.digging = true;
 		runData.ldown_for_dig = true;
 	}
@@ -3556,10 +3622,10 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 			runData.nodig_delay_timer = 0.15;
 
 		bool is_valid_position;
-		MapNode wasnode = map.getNode(nodepos, &is_valid_position);
+		MapNode wasnode = map.getNodeNoEx(nodepos, &is_valid_position);
 		if (is_valid_position) {
 			if (client->moddingEnabled() &&
-					client->getScript()->on_dignode(nodepos, wasnode)) {
+			    		client->getScript()->on_dignode(nodepos, wasnode)) {
 				return;
 			}
 
@@ -3575,7 +3641,7 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 			// implicit else: no prediction
 		}
 
-		client->interact(INTERACT_DIGGING_COMPLETED, pointed);
+		client->interact(2, pointed);
 
 		if (m_cache_enable_particles) {
 			const ContentFeatures &features =
@@ -3603,7 +3669,6 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		const CameraOrientation &cam)
 {
-	TimeTaker tt_update("Game::updateFrame()");
 	LocalPlayer *player = client->getEnv().getLocalPlayer();
 
 	/*
@@ -3628,6 +3693,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		direct_brightness = time_brightness;
 		sunlight_seen = true;
 	} else {
+		ScopeProfiler sp(g_profiler, "Detecting background light", SPT_AVG);
 		float old_brightness = sky->getBrightness();
 		direct_brightness = client->getEnv().getClientMap()
 				.getBackgroundBrightness(MYMIN(runData.fog_range * 1.2, 60 * BS),
@@ -3733,20 +3799,29 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		Inventory
 	*/
 
-	if (player->getWieldIndex() != runData.new_playeritem)
-		client->setPlayerItem(runData.new_playeritem);
+	if (client->getPlayerItem() != runData.new_playeritem)
+		client->selectPlayerItem(runData.new_playeritem);
 
 	// Update local inventory if it has changed
 	if (client->getLocalInventoryUpdated()) {
 		//infostream<<"Updating local inventory"<<std::endl;
+		client->getLocalInventory(*local_inventory);
 		runData.update_wielded_item_trigger = true;
 	}
 
 	if (runData.update_wielded_item_trigger) {
 		// Update wielded tool
-		ItemStack selected_item, hand_item;
-		ItemStack &tool_item = player->getWieldedItem(&selected_item, &hand_item);
-		camera->wield(tool_item);
+		InventoryList *mlist = local_inventory->getList("main");
+
+		if (mlist && (client->getPlayerItem() < mlist->getSize())) {
+			ItemStack item = mlist->getItem(client->getPlayerItem());
+			if (item.getDefinition(itemdef_manager).name.empty()) { // override the hand
+				InventoryList *hlist = local_inventory->getList("hand");
+				if (hlist)
+					item = hlist->getItem(0);
+			}
+			camera->wield(item);
+		}
 
 		runData.update_wielded_item_trigger = false;
 	}
@@ -3766,7 +3841,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 		runData.update_draw_list_last_cam_dir = camera_direction;
 	}
 
-	m_game_ui->update(*stats, client, draw_control, cam, runData.pointed_old, gui_chat_console, dtime);
+	m_game_ui->update(*stats, client, draw_control, cam, runData.pointed_old, dtime);
 
 	/*
 	   make sure menu is on top
@@ -3801,7 +3876,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	*/
 	const video::SColor &skycolor = sky->getSkyColor();
 
-	TimeTaker tt_draw("Draw scene");
+	TimeTaker tt_draw("mainloop: draw");
 	driver->beginScene(true, true, skycolor);
 
 	bool draw_wield_tool = (m_game_ui->m_flags.show_hud &&
@@ -3861,8 +3936,7 @@ void Game::updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
 	driver->endScene();
 
 	stats->drawtime = tt_draw.stop(true);
-	g_profiler->avg("Game::updateFrame(): draw scene [ms]", stats->drawtime);
-	g_profiler->graphAdd("Update frame [ms]", tt_update.stop(true));
+	g_profiler->graphAdd("mainloop_draw", stats->drawtime / 1000.0f);
 }
 
 /* Log times and stuff for visualization */

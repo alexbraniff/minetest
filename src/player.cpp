@@ -36,8 +36,24 @@ Player::Player(const char *name, IItemDefManager *idef):
 
 	inventory.clear();
 	inventory.addList("main", PLAYER_INVENTORY_SIZE);
-	InventoryList *craft = inventory.addList("craft", 9);
-	craft->setWidth(3);
+	InventoryList *craft = inventory.addList("craft", 4);
+	craft->setWidth(2);
+	/*
+
+		Ammy	Helm	Chrm
+				Chst
+		Glov	Belt	Boot
+		Brac	Pant	Brac
+		RingRingRingRingRing
+
+	*/
+	InventoryList *amulet = inventory.addList("amulet", 1);
+	InventoryList *helmChestBeltPants = inventory.addList("helmChestBeltPants", 4);
+	InventoryList *charm = inventory.addList("charm", 1);
+	InventoryList *glovesBracelet = inventory.addList("glovesBracelet", 2);
+	InventoryList *bootsBracelet = inventory.addList("bootsBracelet", 2);
+	InventoryList *rings = inventory.addList("rings", 5);
+	rings->setWidth(5);
 	inventory.addList("craftpreview", 1);
 	inventory.addList("craftresult", 1);
 	inventory.setModified(false);
@@ -88,29 +104,6 @@ Player::~Player()
 		g_settings->deregisterChangedCallback(name,
 			&Player::settingsChangedCallback, &m_player_settings);
 	clearHud();
-}
-
-void Player::setWieldIndex(u16 index)
-{
-	const InventoryList *mlist = inventory.getList("main");
-	m_wield_index = MYMIN(index, mlist ? mlist->getSize() : 0);
-}
-
-ItemStack &Player::getWieldedItem(ItemStack *selected, ItemStack *hand) const
-{
-	assert(selected);
-
-	const InventoryList *mlist = inventory.getList("main"); // TODO: Make this generic
-	const InventoryList *hlist = inventory.getList("hand");
-
-	if (mlist && m_wield_index < mlist->getSize())
-		*selected = mlist->getItem(m_wield_index);
-
-	if (hand && hlist)
-		*hand = hlist->getItem(0);
-
-	// Return effective tool item
-	return (hand && selected->name.empty()) ? *hand : *selected;
 }
 
 u32 Player::addHud(HudElement *toadd)

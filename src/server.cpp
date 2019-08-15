@@ -470,6 +470,7 @@ void Server::step(float dtime)
 
 void Server::AsyncRunStep(bool initial_step)
 {
+	g_profiler->add("Server::AsyncRunStep (num)", 1);
 
 	float dtime;
 	{
@@ -485,7 +486,10 @@ void Server::AsyncRunStep(bool initial_step)
 	if((dtime < 0.001) && !initial_step)
 		return;
 
-	ScopeProfiler sp(g_profiler, "Server::AsyncRunStep()", SPT_AVG);
+	g_profiler->add("Server::AsyncRunStep with dtime (num)", 1);
+
+	//infostream<<"Server steps "<<dtime<<std::endl;
+	//infostream<<"Server::AsyncRunStep(): dtime="<<dtime<<std::endl;
 
 	{
 		MutexAutoLock lock1(m_step_dtime_mutex);
@@ -531,6 +535,8 @@ void Server::AsyncRunStep(bool initial_step)
 		}
 		m_env->reportMaxLagEstimate(max_lag);
 		// Step environment
+		ScopeProfiler sp(g_profiler, "SEnv step");
+		ScopeProfiler sp2(g_profiler, "SEnv step avg", SPT_AVG);
 		m_env->step(dtime);
 	}
 
@@ -620,7 +626,7 @@ void Server::AsyncRunStep(bool initial_step)
 
 		m_clients.lock();
 		const RemoteClientMap &clients = m_clients.getClientList();
-		ScopeProfiler sp(g_profiler, "Server: update visible objects");
+		ScopeProfiler sp(g_profiler, "Server: checking added and deleted objs");
 
 		// Radius inside which objects are active
 		static thread_local const s16 radius =
@@ -756,7 +762,7 @@ void Server::AsyncRunStep(bool initial_step)
 	*/
 	{
 		MutexAutoLock envlock(m_env_mutex);
-		ScopeProfiler sp(g_profiler, "Server: send SAO messages");
+		ScopeProfiler sp(g_profiler, "Server: sending object messages");
 
 		// Key = object id
 		// Value = data sent by object
@@ -966,7 +972,7 @@ void Server::AsyncRunStep(bool initial_step)
 			counter = 0.0;
 			MutexAutoLock lock(m_env_mutex);
 
-			ScopeProfiler sp(g_profiler, "Server: map saving (sum)");
+			ScopeProfiler sp(g_profiler, "Server: saving stuff");
 
 			// Save ban file
 			if (m_banmanager->isModified()) {
@@ -1100,7 +1106,7 @@ void Server::ProcessData(NetworkPacket *pkt)
 	// Environment is locked first.
 	MutexAutoLock envlock(m_env_mutex);
 
-	ScopeProfiler sp(g_profiler, "Server: Process network packet (sum)");
+	ScopeProfiler sp(g_profiler, "Server::ProcessData");
 	u32 peer_id = pkt->getPeerId();
 
 	try {
@@ -1407,6 +1413,7 @@ void Server::SendMovement(session_t peer_id)
 	pkt << g_settings->getFloat("movement_acceleration_fast");
 	pkt << g_settings->getFloat("movement_speed_walk");
 	pkt << g_settings->getFloat("movement_speed_crouch");
+	pkt << g_settings->getFloat("movement_speed_sprint");
 	pkt << g_settings->getFloat("movement_speed_fast");
 	pkt << g_settings->getFloat("movement_speed_climb");
 	pkt << g_settings->getFloat("movement_speed_jump");
@@ -1565,7 +1572,7 @@ void Server::SendChatMessage(session_t peer_id, const ChatMessage &message)
 }
 
 void Server::SendShowFormspecMessage(session_t peer_id, const std::string &formspec,
-	const std::string &formname)
+                                     const std::string &formname)
 {
 	NetworkPacket pkt(TOCLIENT_SHOW_FORMSPEC, 0 , peer_id);
 	if (formspec.empty()){
@@ -1952,13 +1959,6 @@ void Server::SendCSMRestrictionFlags(session_t peer_id)
 	Send(&pkt);
 }
 
-void Server::SendPlayerSpeed(session_t peer_id, const v3f &added_vel)
-{
-	NetworkPacket pkt(TOCLIENT_PLAYER_SPEED, 0, peer_id);
-	pkt << added_vel;
-	Send(&pkt);
-}
-
 s32 Server::playSound(const SimpleSoundSpec &spec,
 		const ServerSoundParams &params)
 {
@@ -2252,12 +2252,14 @@ void Server::SendBlocks(float dtime)
 	MutexAutoLock envlock(m_env_mutex);
 	//TODO check if one big lock could be faster then multiple small ones
 
+	ScopeProfiler sp(g_profiler, "Server: sel and send blocks to clients");
+
 	std::vector<PrioritySortedBlockTransfer> queue;
 
 	u32 total_sending = 0;
 
 	{
-		ScopeProfiler sp2(g_profiler, "Server::SendBlocks(): Collect list");
+		ScopeProfiler sp2(g_profiler, "Server: selecting blocks for sending");
 
 		std::vector<session_t> clients = m_clients.getClientIDs();
 
@@ -2286,16 +2288,16 @@ void Server::SendBlocks(float dtime)
 	u32 max_blocks_to_send = (m_env->getPlayerCount() + g_settings->getU32("max_users")) *
 		g_settings->getU32("max_simultaneous_block_sends_per_client") / 4 + 1;
 
-	ScopeProfiler sp(g_profiler, "Server::SendBlocks(): Send to clients");
-	Map &map = m_env->getMap();
-
 	for (const PrioritySortedBlockTransfer &block_to_send : queue) {
 		if (total_sending >= max_blocks_to_send)
 			break;
 
-		MapBlock *block = map.getBlockNoCreateNoEx(block_to_send.pos);
-		if (!block)
+		MapBlock *block = nullptr;
+		try {
+			block = m_env->getMap().getBlockNoCreate(block_to_send.pos);
+		} catch (const InvalidPositionException &e) {
 			continue;
+		}
 
 		RemoteClient *client = m_clients.lockedGetClientNoEx(block_to_send.peer_id,
 				CS_Active);
@@ -2313,7 +2315,10 @@ void Server::SendBlocks(float dtime)
 
 bool Server::SendBlock(session_t peer_id, const v3s16 &blockpos)
 {
-	MapBlock *block = m_env->getMap().getBlockNoCreateNoEx(blockpos);
+	MapBlock *block = nullptr;
+	try {
+		block = m_env->getMap().getBlockNoCreate(blockpos);
+	} catch (InvalidPositionException &e) {};
 	if (!block)
 		return false;
 
@@ -2859,28 +2864,28 @@ std::wstring Server::handleChat(const std::string &name, const std::wstring &wna
 {
 	// If something goes wrong, this player is to blame
 	RollbackScopeActor rollback_scope(m_rollback,
-			std::string("player:") + name);
+		std::string("player:") + name);
 
 	if (g_settings->getBool("strip_color_codes"))
 		wmessage = unescape_enriched(wmessage);
 
 	if (player) {
 		switch (player->canSendChatMessage()) {
-		case RPLAYER_CHATRESULT_FLOODING: {
-			std::wstringstream ws;
-			ws << L"You cannot send more messages. You are limited to "
-					<< g_settings->getFloat("chat_message_limit_per_10sec")
-					<< L" messages per 10 seconds.";
-			return ws.str();
-		}
-		case RPLAYER_CHATRESULT_KICK:
-			DenyAccess_Legacy(player->getPeerId(),
-					L"You have been kicked due to message flooding.");
-			return L"";
-		case RPLAYER_CHATRESULT_OK:
-			break;
-		default:
-			FATAL_ERROR("Unhandled chat filtering result found.");
+			case RPLAYER_CHATRESULT_FLOODING: {
+				std::wstringstream ws;
+				ws << L"You cannot send more messages. You are limited to "
+				   << g_settings->getFloat("chat_message_limit_per_10sec")
+				   << L" messages per 10 seconds.";
+				return ws.str();
+			}
+			case RPLAYER_CHATRESULT_KICK:
+				DenyAccess_Legacy(player->getPeerId(),
+						L"You have been kicked due to message flooding.");
+				return L"";
+			case RPLAYER_CHATRESULT_OK:
+				break;
+			default:
+				FATAL_ERROR("Unhandled chat filtering result found.");
 		}
 	}
 
@@ -2908,8 +2913,10 @@ std::wstring Server::handleChat(const std::string &name, const std::wstring &wna
 		line += L"-!- You don't have permission to shout.";
 		broadcast_line = false;
 	} else {
-		line += narrow_to_wide(m_script->formatChatMessage(name,
-				wide_to_narrow(wmessage)));
+		line += L"<";
+		line += wname;
+		line += L"> ";
+		line += wmessage;
 	}
 
 	/*
@@ -3506,71 +3513,52 @@ v3f Server::findSpawnPos()
 {
 	ServerMap &map = m_env->getServerMap();
 	v3f nodeposf;
-	if (g_settings->getV3FNoEx("static_spawnpoint", nodeposf))
+	if (g_settings->getV3FNoEx("static_spawnpoint", nodeposf)) {
 		return nodeposf * BS;
+	}
 
 	bool is_good = false;
 	// Limit spawn range to mapgen edges (determined by 'mapgen_limit')
 	s32 range_max = map.getMapgenParams()->getSpawnRangeMax();
 
 	// Try to find a good place a few times
-	for (s32 i = 0; i < 4000 && !is_good; i++) {
+	for(s32 i = 0; i < 4000 && !is_good; i++) {
 		s32 range = MYMIN(1 + i, range_max);
 		// We're going to try to throw the player to this position
 		v2s16 nodepos2d = v2s16(
 			-range + (myrand() % (range * 2)),
 			-range + (myrand() % (range * 2)));
+
 		// Get spawn level at point
 		s16 spawn_level = m_emerge->getSpawnLevelAtPoint(nodepos2d);
-		// Continue if MAX_MAP_GENERATION_LIMIT was returned by the mapgen to
-		// signify an unsuitable spawn position, or if outside limits.
-		if (spawn_level >= MAX_MAP_GENERATION_LIMIT ||
-				spawn_level <= -MAX_MAP_GENERATION_LIMIT)
+		// Continue if MAX_MAP_GENERATION_LIMIT was returned by
+		// the mapgen to signify an unsuitable spawn position
+		if (spawn_level == MAX_MAP_GENERATION_LIMIT)
 			continue;
 
 		v3s16 nodepos(nodepos2d.X, spawn_level, nodepos2d.Y);
-		// Consecutive empty nodes
-		s32 air_count = 0;
 
-		// Search upwards from 'spawn level' for 2 consecutive empty nodes, to
-		// avoid obstructions in already-generated mapblocks.
-		// In ungenerated mapblocks consisting of 'ignore' nodes, there will be
-		// no obstructions, but mapgen decorations are generated after spawn so
-		// the player may end up inside one.
-		for (s32 i = 0; i < 8; i++) {
+		s32 air_count = 0;
+		for (s32 i = 0; i < 10; i++) {
 			v3s16 blockpos = getNodeBlockPos(nodepos);
 			map.emergeBlock(blockpos, true);
-			content_t c = map.getNode(nodepos).getContent();
-
-			// In generated mapblocks allow spawn in all 'airlike' drawtype nodes.
-			// In ungenerated mapblocks allow spawn in 'ignore' nodes.
-			if (m_nodedef->get(c).drawtype == NDT_AIRLIKE || c == CONTENT_IGNORE) {
+			content_t c = map.getNodeNoEx(nodepos).getContent();
+			if (c == CONTENT_AIR || c == CONTENT_IGNORE) {
 				air_count++;
 				if (air_count >= 2) {
-					// Spawn in lower empty node
-					nodepos.Y--;
 					nodeposf = intToFloat(nodepos, BS);
 					// Don't spawn the player outside map boundaries
 					if (objectpos_over_limit(nodeposf))
-						// Exit this loop, positions above are probably over limit
-						break;
-
-					// Good position found, cause an exit from main loop
+						continue;
 					is_good = true;
 					break;
 				}
-			} else {
-				air_count = 0;
 			}
 			nodepos.Y++;
 		}
 	}
 
-	if (is_good)
-		return nodeposf;
-
-	// No suitable spawn point found, return fallback 0,0,0
-	return v3f(0.0f, 0.0f, 0.0f);
+	return nodeposf;
 }
 
 void Server::requestShutdown(const std::string &msg, bool reconnect, float delay)
@@ -3686,7 +3674,10 @@ void dedicated_server_loop(Server &server, bool &kill)
 	for(;;) {
 		// This is kind of a hack but can be done like this
 		// because server.step() is very light
-		sleep_ms((int)(steplen*1000.0));
+		{
+			ScopeProfiler sp(g_profiler, "dedicated server sleep");
+			sleep_ms((int)(steplen*1000.0));
+		}
 		server.step(steplen);
 
 		if (server.isShutdownRequested() || kill)

@@ -500,9 +500,9 @@ void Client::handleCommand_Movement(NetworkPacket* pkt)
 	LocalPlayer *player = m_env.getLocalPlayer();
 	assert(player != NULL);
 
-	float mad, maa, maf, msw, mscr, msf, mscl, msj, lf, lfs, ls, g;
+	float mad, maa, maf, msw, mscr, mssp, msf, mscl, msj, lf, lfs, ls, g;
 
-	*pkt >> mad >> maa >> maf >> msw >> mscr >> msf >> mscl >> msj
+	*pkt >> mad >> maa >> maf >> msw >> mscr >> mssp >> msf >> mscl >> msj
 		>> lf >> lfs >> ls >> g;
 
 	player->movement_acceleration_default   = mad * BS;
@@ -510,6 +510,7 @@ void Client::handleCommand_Movement(NetworkPacket* pkt)
 	player->movement_acceleration_fast      = maf * BS;
 	player->movement_speed_walk             = msw * BS;
 	player->movement_speed_crouch           = mscr * BS;
+	player->movement_speed_sprint           = mssp * BS;
 	player->movement_speed_fast             = msf * BS;
 	player->movement_speed_climb            = mscl * BS;
 	player->movement_speed_jump             = msj * BS;
@@ -900,7 +901,7 @@ void Client::handleCommand_DetachedInventory(NetworkPacket* pkt)
 	u16 ignore;
 	*pkt >> ignore; // this used to be the length of the following string, ignore it
 
-	std::string contents(pkt->getRemainingString(), pkt->getRemainingBytes());
+	std::string contents = pkt->getRemainingString();
 	std::istringstream is(contents, std::ios::binary);
 	inv->deSerialize(is);
 }
@@ -1381,17 +1382,6 @@ void Client::handleCommand_CSMRestrictionFlags(NetworkPacket *pkt)
 	// Restrictions were received -> load mods if it's enabled
 	// Note: this should be moved after mods receptions from server instead
 	loadMods();
-}
-
-void Client::handleCommand_PlayerSpeed(NetworkPacket *pkt)
-{
-	v3f added_vel;
-
-	*pkt >> added_vel;
-
-	LocalPlayer *player = m_env.getLocalPlayer();
-	assert(player != NULL);
-	player->addVelocity(added_vel);
 }
 
 /*

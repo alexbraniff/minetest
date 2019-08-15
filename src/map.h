@@ -155,8 +155,10 @@ public:
 	void dispatchEvent(MapEditEvent *event);
 
 	// On failure returns NULL
-	MapSector * getSectorNoGenerateNoLock(v2s16 p2d);
+	MapSector * getSectorNoGenerateNoExNoLock(v2s16 p2d);
 	// Same as the above (there exists no lock anymore)
+	MapSector * getSectorNoGenerateNoEx(v2s16 p2d);
+	// On failure throws InvalidPositionException
 	MapSector * getSectorNoGenerate(v2s16 p2d);
 	// Gets an existing sector or creates an empty one
 	//MapSector * getSectorCreate(v2s16 p2d);
@@ -189,7 +191,7 @@ public:
 	// Returns a CONTENT_IGNORE node if not found
 	// If is_valid_position is not NULL then this will be set to true if the
 	// position is valid, otherwise false
-	MapNode getNode(v3s16 p, bool *is_valid_position = NULL);
+	MapNode getNodeNoEx(v3s16 p, bool *is_valid_position = NULL);
 
 	/*
 		These handle lighting but not faces.

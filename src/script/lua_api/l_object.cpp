@@ -308,9 +308,8 @@ int ObjectRef::l_get_wield_list(lua_State *L)
 	NO_MAP_LOCK_REQUIRED;
 	ObjectRef *ref = checkobject(L, 1);
 	ServerActiveObject *co = getobject(ref);
-	if (!co)
-		return 0;
-
+	if (co == NULL) return 0;
+	// Do it
 	lua_pushstring(L, co->getWieldList().c_str());
 	return 1;
 }
@@ -321,9 +320,8 @@ int ObjectRef::l_get_wield_index(lua_State *L)
 	NO_MAP_LOCK_REQUIRED;
 	ObjectRef *ref = checkobject(L, 1);
 	ServerActiveObject *co = getobject(ref);
-	if (!co)
-		return 0;
-
+	if (co == NULL) return 0;
+	// Do it
 	lua_pushinteger(L, co->getWieldIndex() + 1);
 	return 1;
 }
@@ -334,12 +332,12 @@ int ObjectRef::l_get_wielded_item(lua_State *L)
 	NO_MAP_LOCK_REQUIRED;
 	ObjectRef *ref = checkobject(L, 1);
 	ServerActiveObject *co = getobject(ref);
-	if (!co) {
+	if (co == NULL) {
 		// Empty ItemStack
 		LuaItemStack::create(L, ItemStack());
 		return 1;
 	}
-
+	// Do it
 	LuaItemStack::create(L, co->getWieldedItem());
 	return 1;
 }
@@ -1090,27 +1088,6 @@ int ObjectRef::l_get_player_velocity(lua_State *L)
 	// Do it
 	push_v3f(L, player->getSpeed() / BS);
 	return 1;
-}
-
-// add_player_velocity(self, {x=num, y=num, z=num})
-int ObjectRef::l_add_player_velocity(lua_State *L)
-{
-	NO_MAP_LOCK_REQUIRED;
-	ObjectRef *ref = checkobject(L, 1);
-	v3f vel = checkFloatPos(L, 2);
-
-	RemotePlayer *player = getplayer(ref);
-	PlayerSAO *co = getplayersao(ref);
-	if (!player || !co)
-		return 0;
-
-	session_t peer_id = player->getPeerId();
-	if (peer_id == PEER_ID_INEXISTENT)
-		return 0;
-	// Do it
-	co->setMaxSpeedOverride(vel);
-	getServer(L)->SendPlayerSpeed(peer_id, vel);
-	return 0;
 }
 
 // get_look_dir(self)
@@ -1952,7 +1929,6 @@ luaL_Reg ObjectRef::methods[] = {
 	luamethod(ObjectRef, is_player_connected),
 	luamethod(ObjectRef, get_player_name),
 	luamethod(ObjectRef, get_player_velocity),
-	luamethod(ObjectRef, add_player_velocity),
 	luamethod(ObjectRef, get_look_dir),
 	luamethod(ObjectRef, get_look_pitch),
 	luamethod(ObjectRef, get_look_yaw),

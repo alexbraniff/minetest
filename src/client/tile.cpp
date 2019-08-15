@@ -21,7 +21,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <algorithm>
 #include <ICameraSceneNode.h>
-#include <IrrCompileConfig.h>
 #include "util/string.h"
 #include "util/container.h"
 #include "util/thread.h"
@@ -35,12 +34,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "renderingengine.h"
 
 
-#if ENABLE_GLES
-#ifdef _IRR_COMPILE_WITH_OGLES1_
+#ifdef __ANDROID__
 #include <GLES/gl.h>
-#else
-#include <GLES2/gl2.h>
-#endif
 #endif
 
 /*
@@ -600,7 +595,7 @@ u32 TextureSource::generateTexture(const std::string &name)
 	video::ITexture *tex = NULL;
 
 	if (img != NULL) {
-#if ENABLE_GLES
+#ifdef __ANDROID__
 		img = Align2Npot2(img, driver);
 #endif
 		// Create texture from resulting image
@@ -757,7 +752,7 @@ void TextureSource::rebuildImagesAndTextures()
 	// Recreate textures
 	for (TextureInfo &ti : m_textureinfo_cache) {
 		video::IImage *img = generateImage(ti.name);
-#if ENABLE_GLES
+#ifdef __ANDROID__
 		img = Align2Npot2(img, driver);
 #endif
 		// Create texture from resulting image
@@ -994,30 +989,8 @@ video::IImage* TextureSource::generateImage(const std::string &name)
 	return baseimg;
 }
 
-#if ENABLE_GLES
-
-
-static inline u16 get_GL_major_version()
-{
-	const GLubyte *gl_version = glGetString(GL_VERSION);
-	return (u16) (gl_version[0] - '0');
-}
-
-/**
- * Check if hardware requires npot2 aligned textures
- * @return true if alignment NOT(!) requires, false otherwise
- */
-
-bool hasNPotSupport()
-{
-	// Only GLES2 is trusted to correctly report npot support
-	// Note: we cache the boolean result, the GL context will never change.
-	static const bool supported = get_GL_major_version() > 1 &&
-		glGetString(GL_EXTENSIONS) &&
-		strstr((char *)glGetString(GL_EXTENSIONS), "GL_OES_texture_npot");
-	return supported;
-}
-
+#ifdef __ANDROID__
+#include <GLES/gl.h>
 /**
  * Check and align image to npot2 if required by hardware
  * @param image image to check for npot2 alignment
@@ -1025,33 +998,53 @@ bool hasNPotSupport()
  * @return image or copy of image aligned to npot2
  */
 
+inline u16 get_GL_major_version()
+{
+	const GLubyte *gl_version = glGetString(GL_VERSION);
+	return (u16) (gl_version[0] - '0');
+}
+
 video::IImage * Align2Npot2(video::IImage * image,
 		video::IVideoDriver* driver)
 {
-	if (image == NULL)
+	if (image == NULL) {
 		return image;
-
-	if (hasNPotSupport())
-		return image;
+	}
 
 	core::dimension2d<u32> dim = image->getDimension();
+
+	// Only GLES2 is trusted to correctly report npot support
+	// Note: we cache the boolean result. GL context will never change on Android.
+	static const bool hasNPotSupport = get_GL_major_version() > 1 &&
+		glGetString(GL_EXTENSIONS) &&
+		strstr((char *)glGetString(GL_EXTENSIONS), "GL_OES_texture_npot");
+
+	if (hasNPotSupport)
+		return image;
+
 	unsigned int height = npot2(dim.Height);
 	unsigned int width  = npot2(dim.Width);
 
-	if (dim.Height == height && dim.Width == width)
+	if ((dim.Height == height) &&
+			(dim.Width == width)) {
 		return image;
+	}
 
-	if (dim.Height > height)
+	if (dim.Height > height) {
 		height *= 2;
-	if (dim.Width > width)
+	}
+
+	if (dim.Width > width) {
 		width *= 2;
+	}
 
 	video::IImage *targetimage =
 			driver->createImage(video::ECF_A8R8G8B8,
 					core::dimension2d<u32>(width, height));
 
-	if (targetimage != NULL)
+	if (targetimage != NULL) {
 		image->copyToScaling(targetimage);
+	}
 	image->drop();
 	return targetimage;
 }
@@ -1085,7 +1078,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 	// Stuff starting with [ are special commands
 	if (part_of_name.empty() || part_of_name[0] != '[') {
 		video::IImage *image = m_sourcecache.getOrLoad(part_of_name);
-#if ENABLE_GLES
+#ifdef __ANDROID__
 		image = Align2Npot2(image, driver);
 #endif
 		if (image == NULL) {

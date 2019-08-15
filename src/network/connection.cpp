@@ -322,10 +322,6 @@ void ReliablePacketBuffer::insert(BufferedPacket &p,u16 next_expected)
 	}
 
 	if (s == seqnum) {
-		/* nothing to do this seems to be a resent packet */
-		/* for paranoia reason data should be compared */
-		--m_list_size;
-
 		if (
 			(readU16(&(i->data[BASE_HEADER_SIZE+1])) != seqnum) ||
 			(i->data.getSize() != p.data.getSize()) ||
@@ -344,6 +340,10 @@ void ReliablePacketBuffer::insert(BufferedPacket &p,u16 next_expected)
 					p.address.serializeString().c_str());
 			throw IncomingDataCorruption("duplicated packet isn't same as original one");
 		}
+
+		/* nothing to do this seems to be a resent packet */
+		/* for paranoia reason data should be compared */
+		--m_list_size;
 	}
 	/* insert or push back */
 	else if (i != m_list.end()) {
@@ -417,11 +417,6 @@ SharedBuffer<u8> IncomingSplitBuffer::insert(const BufferedPacket &p, bool relia
 			<< std::endl;
 		return SharedBuffer<u8>();
 	}
-	if (chunk_num >= chunk_count) {
-		errorstream << "IncomingSplitBuffer::insert(): chunk_num=" << chunk_num
-				<< " >= chunk_count=" << chunk_count << std::endl;
-		return SharedBuffer<u8>();
-	}
 
 	// Add if doesn't exist
 	if (m_buf.find(seqnum) == m_buf.end()) {
@@ -430,12 +425,10 @@ SharedBuffer<u8> IncomingSplitBuffer::insert(const BufferedPacket &p, bool relia
 
 	IncomingSplitPacket *sp = m_buf[seqnum];
 
-	if (chunk_count != sp->chunk_count) {
-		errorstream << "IncomingSplitBuffer::insert(): chunk_count="
-				<< chunk_count << " != sp->chunk_count=" << sp->chunk_count
-				<< std::endl;
-		return SharedBuffer<u8>();
-	}
+	if (chunk_count != sp->chunk_count)
+		LOG(derr_con<<"Connection: WARNING: chunk_count="<<chunk_count
+				<<" != sp->chunk_count="<<sp->chunk_count
+				<<std::endl);
 	if (reliable != sp->reliable)
 		LOG(derr_con<<"Connection: WARNING: reliable="<<reliable
 				<<" != sp->reliable="<<sp->reliable
@@ -856,8 +849,8 @@ void Peer::RTTStatistics(float rtt, const std::string &profiler_id,
 								jitter * (1/num_samples);
 
 		if (!profiler_id.empty()) {
-			g_profiler->graphAdd(profiler_id + " RTT [ms]", rtt * 1000.f);
-			g_profiler->graphAdd(profiler_id + " jitter [ms]", jitter * 1000.f);
+			g_profiler->graphAdd(profiler_id + "_rtt", rtt);
+			g_profiler->graphAdd(profiler_id + "_jitter", jitter);
 		}
 	}
 	/* save values required for next loop */

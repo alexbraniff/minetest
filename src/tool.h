@@ -25,8 +25,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "itemgroup.h"
 #include <json/json.h>
 
-struct ItemDefinition;
-
 struct ToolGroupCap
 {
 	std::unordered_map<int, float> times;
@@ -134,5 +132,3 @@ PunchDamageResult getPunchDamage(
 		const ItemStack *punchitem,
 		float time_from_last_punch
 );
-
-f32 getToolRange(const ItemDefinition &def_selected, const ItemDefinition &def_hand);
